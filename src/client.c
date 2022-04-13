@@ -23,7 +23,7 @@
  * @param argv Array containing command line arguments.
  * @return Error code (int).
  */
-int main(int argc, char *argv[])
+int main(int argc, char *argv[]) 
 {
     /*
     Exemplo de input:
