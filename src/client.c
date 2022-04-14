@@ -10,11 +10,16 @@
  */
 
 #include <stdio.h>
-#include <stdbool.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <sys/stat.h>
 
 #include "../includes/client.h"
+
+#define DEBUG
 
 void *xmalloc(size_t size)
 {
@@ -42,7 +47,6 @@ int main(int argc, char *argv[])
     Menos de 6 argumentos raise erro.
     Also, o enunciado diz para assumir que o input é sempre válido.
     */
-
     if (argc < 6)
     {
         fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
@@ -50,7 +54,7 @@ int main(int argc, char *argv[])
     }
 
     bool proc_file = false;
-    if (strcmp(argv[1], "proc_file") != 0) proc_file = true;
+    if (strcmp(argv[1], "proc_file") != 0) proc_file = true; 
 
     char *ptr;
     int priority = strtol(argv[2], &ptr, 10);
@@ -61,6 +65,7 @@ int main(int argc, char *argv[])
         return FORMAT_ERROR;
     }
 
+                       /* Usar o xmalloc para não ter de dar handle ao erro. */
     char *input_file = xmalloc(sizeof(char) * (strlen(argv[3]) + 1));
     memcpy(input_file, argv[3], strlen(argv[3]) + 1);
 
@@ -70,6 +75,7 @@ int main(int argc, char *argv[])
     int operation_count = argc - 5;
     char *operations = xmalloc(sizeof(char) * 16 * operation_count);
 
+    /* Meter todos os comandos (gcompress, nop, ...) numa string para poder enviar mais facilmente. */
     for (int i = 5; i < argc; i++)
     {
         char *temp = xmalloc(sizeof(char) * 16);        
@@ -79,14 +85,31 @@ int main(int argc, char *argv[])
         free(temp);
     }
 
-    //TODO Pegar nisto tudo e mandar por um fifo.
+    #ifdef DEBUG
+        printf("ProcFile >> %d\n", proc_file);
+        printf("Priority >> %d\n", priority);
+        printf("Input    >> %s\n", input_file);
+        printf("Output   >> %s\n", output_file);
+        printf("Commands >> %s\n", operations);
+    #endif
 
-    printf("ProcFile >> %d\n", proc_file);
-    printf("Priority >> %d\n", priority);
-    printf("Input    >> %s\n", input_file);
-    printf("Output   >> %s\n", output_file);
-    printf("Commands >> %s\n", operations);
+    /* Criação do FIFO por onde vamos enviar os dados do input. */
+    if (mkfifo("com/com1", 0777) == -1)
+    {
+        if (errno != EEXIST)
+        {
+            fprintf(stderr, "Could not create fifo file.\n");
+            return FIFO_ERROR;
+        }
+    }
 
+    /*
+    Escrita dos dados para o FIFO com1.
+    int fifo_fd = open("com/com1", O_WRONLY);
+    write(...);
+    close(fifo_fd);
+    */
+    
     free(input_file); free(output_file);
     free(operations);
 

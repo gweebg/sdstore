@@ -5,8 +5,8 @@ CC = gcc
 CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wundef -Wshadow -Wstrict-prototypes -Wwrite-strings -Wunreachable-code -Werror
 
 # Flags de linking
-LDFLAGS_C   =  -lm
-LDFLAGS_S = -lm $(shell pkg-config --libs libcpuid) $(shell pkg-config --libs glib-2.0)
+LDFLAGS_C = -lm
+LDFLAGS_S = -lm 
 
 # Variáveis
 SRC_DIR = src
@@ -28,14 +28,13 @@ NAME_S   = server
 NAME_S_S = server
 
 # Cliente
-$(NAME): cleant
+$(NAME): cleans
 $(NAME): $(BIN_DIR)/$(NAME)
 
 $(BIN_DIR)/$(NAME): $(OBJ)
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS_C) -o $@
 	ln -sf $@ $(NAME_C)
-	mkdir -p entrada saida
 
 -include $(DEP)
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
@@ -61,8 +60,11 @@ clean:
 	-rm -rf obj/* $(NAME_C)
 	-rm client
 	-rm saida/*
+	-rm com/*
 
-.PHONY: cleant
-cleant:
-	-rm -rf obj/* $(NAME_S_S)
-	-rm saida/*.txt
+.PHONY: cleans
+cleans:
+	-rm -rf obj/* $(NAME_C)
+	-rm server
+	-rm saida/*
+	-rm com/*
