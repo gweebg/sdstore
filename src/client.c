@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdbool.h>
 #include <sys/stat.h>
 
@@ -93,25 +94,33 @@ int main(int argc, char *argv[])
         printf("Commands >> %s\n", operations);
     #endif
 
-    /* Criação do FIFO por onde vamos enviar os dados do input. */
-    if (mkfifo("com/com1", 0777) == -1)
+    /* O fifo de escrita já está aberto pelo servidor, só precisamos de escrever. */
+
+    int client_to_server;
+    const char *cts_fifo = "com/cts";
+    client_to_server = open(cts_fifo, O_WRONLY);
+
+    int server_to_client;
+    const char *stc_fifo = "com/stc";
+    server_to_client = open(stc_fifo, O_RDONLY);
+
+    if (client_to_server < 0 || server_to_client < 0)
     {
-        if (errno != EEXIST)
-        {
-            fprintf(stderr, "Could not create fifo file.\n");
-            return FIFO_ERROR;
-        }
+        fprintf(stderr, "[!] Could not open at least one FIFO file (cts|stc).\n");
+        return OPEN_ERROR;
     }
 
-    /*
-    Escrita dos dados para o FIFO com1.
-    int fifo_fd = open("com/com1", O_WRONLY);
-    write(...);
-    close(fifo_fd);
-    */
+    if (write(client_to_server, operations, strlen(operations)) == -1)
+    {
+        fprintf(stderr, "[!] Could not write to FIFO 'client_to_server'.\n");
+        return WRITE_ERROR;
+    }
     
     free(input_file); free(output_file);
     free(operations);
+
+    // close(client_to_server);
+    // close(server_to_client);
 
     return 0;
 }

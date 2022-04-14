@@ -2,7 +2,7 @@
 CC = gcc
 
 # Flags de compilação
-CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wundef -Wshadow -Wstrict-prototypes -Wwrite-strings -Wunreachable-code -Werror
+CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wundef -Wshadow  -Wwrite-strings -Wunreachable-code -Werror
 
 # Flags de linking
 LDFLAGS_C = -lm
@@ -10,7 +10,7 @@ LDFLAGS_S = -lm
 
 # Variáveis
 SRC_DIR = src
-INC_DIR = include
+INC_DIR = includes
 BIN_DIR = obj
 
 SRC = $(shell find src -type f \( -iname "*.c" ! -iname "server.c" \))
@@ -28,7 +28,6 @@ NAME_S   = server
 NAME_S_S = server
 
 # Cliente
-$(NAME): cleans
 $(NAME): $(BIN_DIR)/$(NAME)
 
 $(BIN_DIR)/$(NAME): $(OBJ)
@@ -42,7 +41,6 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -I$(INC_DIR) -MMD -c $< -o $@
 
 # Servidor
-$(NAME_S): clean
 $(NAME_S): $(BIN_DIR)/$(NAME_S)
 
 $(BIN_DIR)/$(NAME_S): $(OBJ_S)
@@ -64,7 +62,7 @@ clean:
 
 .PHONY: cleans
 cleans:
-	-rm -rf obj/* $(NAME_C)
+	-rm -rf obj/* $(NAME_S)
 	-rm server
 	-rm saida/*
 	-rm com/*
