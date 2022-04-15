@@ -2,7 +2,7 @@
 CC = gcc
 
 # Flags de compilação
-CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wundef -Wshadow  -Wwrite-strings -Wunreachable-code -Werror
+CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wunreachable-code 
 
 # Flags de linking
 LDFLAGS_C = -lm
@@ -52,6 +52,7 @@ $(BIN_DIR)/$(NAME_S): $(OBJ_S)
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -I$(INC_DIR) -MMD -c $< -o $@
+	mkdir -p com
 
 .PHONY: clean
 clean:

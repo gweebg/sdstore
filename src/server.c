@@ -18,7 +18,33 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 
-// #include "../includes/server.h"
+#include "../includes/server.h"
+
+/**
+ * @brief A better version of malloc that removes the work of checking for error.
+ * 
+ * @param size Number of bytes to allocate.
+ * @return Address of the new allocated memory block.
+ */
+void *xmalloc(size_t size)
+{
+    void *result = malloc(size);
+    if (!result)
+    {
+        fprintf(stderr, "Failed to allocate memory (malloc error).\n");
+        return NULL;
+    }
+    return result;
+}
+
+/**
+ * @brief Function that halts the execution because of an write error.
+ */
+void raise_read_error()
+{
+    fprintf(stderr, "[!] Could not read from FIFO.\n");
+    exit(READ_ERROR);
+}
 
 int main()
 {
@@ -38,30 +64,31 @@ int main()
     write(STDOUT_FILENO, "[!] Server is online!\n" , 23);
     write(STDOUT_FILENO, "[*] Listening for data...\n", 27);
 
-    char buffer[1024];
+    char arguments[BUFSIZ];
     while(true)
     {
-        if (read(client_to_server, buffer, 1024) == -1)
-        {
-            fprintf(stderr, "[!] Could not read from FIFO. Aborting...\n");
-            return 1;
-        }
+        /* 
+        Ler o valor dos argumentos enviados pelo client (str) (primeiro o tamanho e depois a string)
+        int args_len, read_bytes;
+        if ((read_bytes = read(client_to_server, &args_len, sizeof(int))) < 0) raise_read_error();
+        else if (read_bytes != 0) printf("[>] %d\n", args_len);
+        */
 
-        if (strcmp("exit", buffer) == 0)
-        {
-            printf("[!] Server is offline!\n");
-            break;
-        }
+        // TODO Para tornar mais eficiente convém mandar primeiro o tamanho da string.
+        if (read(client_to_server, arguments, BUFSIZ) < 0) raise_read_error();
+        else if (strcmp(arguments, "") != 0) printf("[*] %s\n\n", arguments);
 
-        write(STDOUT_FILENO, buffer, strlen(buffer));
-        memset(buffer, 0, sizeof(buffer));
+        /* Reset buffer */
+        memset(arguments, 0, BUFSIZ);
     }
 
     close(client_to_server);
     close(server_to_client);
 
-    // unlink(cts_fifo);
-    // unlink(stc_fifo);
+    /*
+    unlink(cts_fifo);
+    unlink(stc_fifo);
+    */
 
     return 0;
 }

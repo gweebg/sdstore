@@ -22,6 +22,12 @@
 
 #define DEBUG
 
+/**
+ * @brief A better version of malloc that removes the work of checking for error.
+ * 
+ * @param size Number of bytes to allocate.
+ * @return Address of the new allocated memory block.
+ */
 void *xmalloc(size_t size)
 {
     void *result = malloc(size);
@@ -31,6 +37,15 @@ void *xmalloc(size_t size)
         return NULL;
     }
     return result;
+}
+
+/**
+ * @brief Function that halts the execution because of an write error.
+ */
+void raise_write_error()
+{
+    fprintf(stderr, "[!] Could not write to FIFO.\n");
+    exit(WRITE_ERROR);
 }
 
 /**
@@ -48,51 +63,24 @@ int main(int argc, char *argv[])
     Menos de 6 argumentos raise erro.
     Also, o enunciado diz para assumir que o input é sempre válido.
     */
+
     if (argc < 6)
     {
         fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
         return FORMAT_ERROR;
     }
 
-    bool proc_file = false;
-    if (strcmp(argv[1], "proc_file") != 0) proc_file = true; 
+    char *arguments = xmalloc(sizeof(char) * 32 * (argc - 1));
 
-    char *ptr;
-    int priority = strtol(argv[2], &ptr, 10);
-
-    if (*ptr != '\0')
+    /* Meter todos os argumentos numa string para poder enviar mais facilmente para o servidor. */
+    for (int i = 1; i < argc; i++)
     {
-        fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
-        return FORMAT_ERROR;
-    }
-
-                       /* Usar o xmalloc para não ter de dar handle ao erro. */
-    char *input_file = xmalloc(sizeof(char) * (strlen(argv[3]) + 1));
-    memcpy(input_file, argv[3], strlen(argv[3]) + 1);
-
-    char *output_file = xmalloc(sizeof(char) * (strlen(argv[4]) + 1));
-    memcpy(output_file, argv[4], strlen(argv[4]) + 1);
-
-    int operation_count = argc - 5;
-    char *operations = xmalloc(sizeof(char) * 16 * operation_count);
-
-    /* Meter todos os comandos (gcompress, nop, ...) numa string para poder enviar mais facilmente. */
-    for (int i = 5; i < argc; i++)
-    {
-        char *temp = xmalloc(sizeof(char) * 16);        
+        char *temp = xmalloc(sizeof(char) * 32);        
         sprintf(temp, "%s ", argv[i]);
 
-        strncat(operations, temp, strlen(argv[i]) + 1);
+        strncat(arguments, temp, strlen(argv[i]) + 1);
         free(temp);
     }
-
-    #ifdef DEBUG
-        printf("ProcFile >> %d\n", proc_file);
-        printf("Priority >> %d\n", priority);
-        printf("Input    >> %s\n", input_file);
-        printf("Output   >> %s\n", output_file);
-        printf("Commands >> %s\n", operations);
-    #endif
 
     /* O fifo de escrita já está aberto pelo servidor, só precisamos de escrever. */
 
@@ -110,17 +98,16 @@ int main(int argc, char *argv[])
         return OPEN_ERROR;
     }
 
-    if (write(client_to_server, operations, strlen(operations)) == -1)
-    {
-        fprintf(stderr, "[!] Could not write to FIFO 'client_to_server'.\n");
-        return WRITE_ERROR;
-    }
+    /* Enviar a string que contem os argumentos (str) */
+    int args_len = strlen(arguments) + 1;
+    // if (write(client_to_server, &args_len, sizeof(int)) < 0) raise_write_error();  /* Primeiro enviar o tamanho da string */
+    if (write(client_to_server, arguments, args_len) < 0) raise_write_error(); /* E depois a string */
     
-    free(input_file); free(output_file);
-    free(operations);
+    free(arguments);
 
-    // close(client_to_server);
-    // close(server_to_client);
+    /* Acaba a comunicação por isso fechamos os FIFOS do lado do client. */
+    close(client_to_server);
+    close(server_to_client);
 
     return 0;
 }
