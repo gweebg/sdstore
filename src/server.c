@@ -46,8 +46,40 @@ void raise_read_error()
     exit(READ_ERROR);
 }
 
+/**
+* @brief Builds a struct from a String.
+*
+* @param string string with the info for the struct.
+* @return Built struct input.
+*/
+Input createInput(char *string){
+    int bytesRead, i = 1;
+    Input r;
+    r.proc_file = false;
+    char *buf = strtok(string, " ");
+    r.priority = atoi(buf);
+    buf = strtok(NULL, " ");
+    r.from = strdup(buf);
+    buf = strtok(NULL, " ");
+    r.to = strdup(buf);
+    r.operations = malloc(sizeof(char*)*i);
+    for(buf = strtok(NULL, " "); buf != NULL; i++){
+        if(strcmp(buf, "encrypt"))
+            r.proc_file = true;
+
+        r.operations = realloc(r.operations, sizeof(char*)*i);
+        r.operations[i-1] = strdup(buf);
+        buf = strtok(NULL, " ");
+    }
+
+    return r;
+}
+
+
+
 int main()
 {
+    int read_bytes, args_len;
     /* cts <=> client_to_server */
     int client_to_server;
     const char *cts_fifo = "com/cts";
@@ -70,9 +102,10 @@ int main()
         /* 
         Ler o valor dos argumentos enviados pelo client (str) (primeiro o tamanho e depois a string)
         int args_len, read_bytes;
+        */
         if ((read_bytes = read(client_to_server, &args_len, sizeof(int))) < 0) raise_read_error();
         else if (read_bytes != 0) printf("[>] %d\n", args_len);
-        */
+        
 
         // TODO Para tornar mais eficiente convém mandar primeiro o tamanho da string.
         if (read(client_to_server, arguments, BUFSIZ) < 0) raise_read_error();
