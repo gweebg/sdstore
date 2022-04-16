@@ -75,11 +75,8 @@ Input createInput(char *string){
     return r;
 }
 
-
-
 int main()
 {
-    int read_bytes, args_len;
     /* cts <=> client_to_server */
     int client_to_server;
     const char *cts_fifo = "com/cts";
@@ -102,10 +99,9 @@ int main()
         /* 
         Ler o valor dos argumentos enviados pelo client (str) (primeiro o tamanho e depois a string)
         int args_len, read_bytes;
-        */
         if ((read_bytes = read(client_to_server, &args_len, sizeof(int))) < 0) raise_read_error();
         else if (read_bytes != 0) printf("[>] %d\n", args_len);
-        
+        */
 
         // TODO Para tornar mais eficiente convém mandar primeiro o tamanho da string.
         if (read(client_to_server, arguments, BUFSIZ) < 0) raise_read_error();
