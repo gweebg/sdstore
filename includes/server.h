@@ -1,6 +1,9 @@
 #pragma once
 
 #define READ_ERROR 1
+#define FORK_ERROR 2
+#define PIPE_ERROR 3
+#define WRITE_ERROR 4
 
 /**
  * @brief Input data structure.
