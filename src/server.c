@@ -1,5 +1,5 @@
 /**
- * @file server.c
+ * @file server->c
  * @author gweebg ; johnny_longo 
  * @brief Server side of the application. 
  * @version 0.1
@@ -22,7 +22,7 @@
 #include "../includes/server.h"
 
 /**
- * @brief A better version of malloc that removes the work of checking for error.
+ * @brief A better version of malloc that removes the work of checking for error->
  * 
  * @param size Number of bytes to allocate.
  * @return Address of the new allocated memory block.
@@ -39,7 +39,7 @@ void *xmalloc(size_t size)
 }
 
 /**
- * @brief Function that halts the execution because of an write error.
+ * @brief Function that halts the execution because of an write error->
  */
 void raise_read_error()
 {
@@ -53,27 +53,24 @@ void raise_read_error()
 * @param string string with the info for the struct.
 * @return Built struct input.
 */
-Input createInput(char *string){
-    int bytesRead, i = 1;
-    Input r;
-    r.proc_file = false;
+void create_input(char *string, Input *r){
+    int i = 1;
+    r->proc_file = false;
     char *buf = strtok(string, " ");
-    r.priority = atoi(buf);
+    r->priority = atoi(buf);
     buf = strtok(NULL, " ");
-    r.from = strdup(buf);
+    r->from = strdup(buf);
     buf = strtok(NULL, " ");
-    r.to = strdup(buf);
-    r.operations = malloc(sizeof(char*)*i);
+    r->to = strdup(buf);
+    r->operations = malloc(sizeof(char*)*i);
     for(buf = strtok(NULL, " "); buf != NULL; i++){
         if(strcmp(buf, "encrypt"))
-            r.proc_file = true;
+            r->proc_file = true;
 
-        r.operations = realloc(r.operations, sizeof(char*)*i);
-        r.operations[i-1] = strdup(buf);
+        r->operations = realloc(r->operations, sizeof(char*)*i);
+        r->operations[i-1] = strdup(buf);
         buf = strtok(NULL, " ");
     }
-
-    return r;
 }
 
 int main()
