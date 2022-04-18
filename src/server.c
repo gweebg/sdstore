@@ -73,6 +73,60 @@ void create_input(char *string, Input *r){
     }
 }
 
+int compare_priorities(const void *a, const void *b){
+    const Input *i1 = (const Input *)a;
+    const Input *i2 = (const Input *)b;
+    if(i1->priority < i2->priority)
+        return 1;
+    if(i1->priority > i2->priority)
+        return -1;
+    return 0;
+}
+
+Input* create_queue(Input *arr, Input i){
+    arr = malloc(sizeof(Input));
+    arr[0] = i;
+    return arr;
+}
+
+int insert_elem(Input *arr, int size, Input i){
+    if(size == 0){
+        arr = create_queue(arr, i);
+        return 0;
+    }
+    arr = realloc(arr, size+1);
+    if(arr == NULL)
+        return -1;
+
+    arr[size] = i;
+    qsort(arr, size+1, sizeof(Input), compare_priorities);
+    return 1;
+}
+
+int cat_queues(Input *arr1, int size1, Input *arr2, int size2){
+    arr1 = realloc(arr1, sizeof(Input) * (size1+size2));
+    if(arr1 == NULL || size1*size2 <= 0)
+        return -1;
+    int i = size1, j = 0;
+    while(i < size1-1+size2 && j < size2){
+        arr1[i] = arr2[j];
+        i++;
+        j++;
+    }
+    qsort(arr1, size1+size2, sizeof(Input), compare_priorities);
+    free(arr2);
+    return 1;
+}
+
+int pop_queue(Input *arr, int size, Input *r){
+    *r = arr[0];
+    memmove(arr, &arr[1], size-1);
+    arr = realloc(arr, sizeof(Input) * size-1);
+    if(arr == NULL)
+        return -1;
+    return 1;
+}
+
 int main()
 {
     /*
