@@ -53,22 +53,28 @@ void raise_read_error()
 * @param string string with the info for the struct.
 * @return Built struct input.
 */
-void create_input(char *string, Input *r){
+void create_input(char *string, Input *r)
+{
     int i = 1;
     r->proc_file = false;
+
     char *buf = strtok(string, " ");
     r->priority = atoi(buf);
+
     buf = strtok(NULL, " ");
     r->from = strdup(buf);
+    
     buf = strtok(NULL, " ");
     r->to = strdup(buf);
     r->operations = malloc(sizeof(char*)*i);
-    for(buf = strtok(NULL, " "); buf != NULL; i++){
-        if(strcmp(buf, "encrypt"))
-            r->proc_file = true;
+    
+    for (buf = strtok(NULL, " "); buf != NULL; i++)
+    {
+        if(strcmp(buf, "encrypt")) r->proc_file = true;
 
         r->operations = realloc(r->operations, sizeof(char*)*i);
         r->operations[i-1] = strdup(buf);
+
         buf = strtok(NULL, " ");
     }
 }
@@ -78,16 +84,19 @@ void create_input(char *string, Input *r){
  * 
  * @param a First element.
  * @param b Second element.
- * @return int returns in order for priorities to be decreasing. Invert signals to make it increase.
+ * @return Returns in order for priorities to be decreasing (int). Invert signals to make it increase.
  */
-
-int compare_priorities(const void *a, const void *b){
+int compare_priorities(const void *a, const void *b)
+{
     const Input *i1 = (const Input *)a;
     const Input *i2 = (const Input *)b;
-    if(i1->priority < i2->priority)
+
+    if (i1->priority < i2->priority)
         return 1;
-    if(i1->priority > i2->priority)
+
+    if (i1->priority > i2->priority)
         return -1;
+
     return 0;
 }
 
@@ -99,7 +108,8 @@ int compare_priorities(const void *a, const void *b){
  * @return New pointer to the head of the array.
  */
 
-Input* create_queue(Input *arr, Input i){
+Input* create_queue(Input *arr, Input i)
+{
     arr = malloc(sizeof(Input));
     arr[0] = i;
     return arr;
@@ -113,17 +123,19 @@ Input* create_queue(Input *arr, Input i){
  * @param i New member to insert.
  * @return 0 if new list was created, pos if insertion was successful, negative value otherwise.
  */
-
-int insert_elem(Input *arr, int size, Input i){
-    if(size == 0){
+int insert_elem(Input *arr, int size, Input i)
+{
+    if (size == 0)
+    {
         arr = create_queue(arr, i);
         return 0;
     }
+
     arr = realloc(arr, size+1);
-    if(arr == NULL)
-        return -1;
+    if (arr == NULL) return -1;
 
     arr[size] = i;
+
     qsort(arr, size+1, sizeof(Input), compare_priorities);
     return 1;
 }
@@ -137,17 +149,20 @@ int insert_elem(Input *arr, int size, Input i){
  * @param size2 Size of second array.
  * @return Negative if one of the queues is empty, positive otherwise.
  */
-
-int cat_queues(Input *arr1, int size1, Input *arr2, int size2){
+int cat_queues(Input *arr1, int size1, Input *arr2, int size2)
+{
     arr1 = realloc(arr1, sizeof(Input) * (size1+size2));
-    if(arr1 == NULL || size1*size2 <= 0)
-        return -1;
+
+    if (arr1 == NULL || size1*size2 <= 0) return -1;
+
     int i = size1, j = 0;
-    while(i < size1-1+size2 && j < size2){
+    while (i < size1-1+size2 && j < size2)
+    {
         arr1[i] = arr2[j];
         i++;
         j++;
     }
+
     qsort(arr1, size1+size2, sizeof(Input), compare_priorities);
     free(arr2);
     return 1;
@@ -161,15 +176,16 @@ int cat_queues(Input *arr1, int size1, Input *arr2, int size2){
  * @param r Pointer to where the Element will be popped.
  * @return int If arr is empty or memmove messes up the queue returns neg, pos otherwise.
  */
-
-int pop_queue(Input *arr, int size, Input *r){
-    if(arr == NULL)
-        return -1;
+int pop_queue(Input *arr, int size, Input *r)
+{
+    if (arr == NULL) return -1;
+    
     *r = arr[0];
     memmove(arr, &arr[1], size-1);
+
     arr = realloc(arr, sizeof(Input) * size-1);
-    if(arr == NULL)
-        return -1;
+    if (arr == NULL) return -1;
+
     return 1;
 }
 
