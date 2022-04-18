@@ -73,6 +73,14 @@ void create_input(char *string, Input *r){
     }
 }
 
+/**
+ * @brief Auxiliary function to compare priorities. Used in qsort.
+ * 
+ * @param a First element.
+ * @param b Second element.
+ * @return int returns in order for priorities to be decreasing. Invert signals to make it increase.
+ */
+
 int compare_priorities(const void *a, const void *b){
     const Input *i1 = (const Input *)a;
     const Input *i2 = (const Input *)b;
@@ -83,11 +91,28 @@ int compare_priorities(const void *a, const void *b){
     return 0;
 }
 
+/**
+ * @brief Create a queue in case other functions find out the queue is empty and/or NULL.
+ * 
+ * @param arr Start of queue.
+ * @param i Input to insert in head.
+ * @return New pointer to the head of the array.
+ */
+
 Input* create_queue(Input *arr, Input i){
     arr = malloc(sizeof(Input));
     arr[0] = i;
     return arr;
 }
+
+/**
+ * @brief Adds a single element to the queue.
+ * 
+ * @param arr Start of the queue.
+ * @param size Initial size of the queue before insertion.
+ * @param i New member to insert.
+ * @return 0 if new list was created, pos if insertion was successful, negative value otherwise.
+ */
 
 int insert_elem(Input *arr, int size, Input i){
     if(size == 0){
@@ -102,6 +127,16 @@ int insert_elem(Input *arr, int size, Input i){
     qsort(arr, size+1, sizeof(Input), compare_priorities);
     return 1;
 }
+
+/**
+ * @brief Concatenates two queues. Will free the second queue.
+ * 
+ * @param arr1 Array to be increased.
+ * @param size1 Size of first array.
+ * @param arr2 Array whose elements will be added.
+ * @param size2 Size of second array.
+ * @return Negative if one of the queues is empty, positive otherwise.
+ */
 
 int cat_queues(Input *arr1, int size1, Input *arr2, int size2){
     arr1 = realloc(arr1, sizeof(Input) * (size1+size2));
@@ -118,7 +153,18 @@ int cat_queues(Input *arr1, int size1, Input *arr2, int size2){
     return 1;
 }
 
+/**
+ * @brief Pops the first element of the queue to r.
+ * 
+ * @param arr Queue who (hopefully) is still sorted.
+ * @param size Initial size of queue.
+ * @param r Pointer to where the Element will be popped.
+ * @return int If arr is empty or memmove messes up the queue returns neg, pos otherwise.
+ */
+
 int pop_queue(Input *arr, int size, Input *r){
+    if(arr == NULL)
+        return -1;
     *r = arr[0];
     memmove(arr, &arr[1], size-1);
     arr = realloc(arr, sizeof(Input) * size-1);
