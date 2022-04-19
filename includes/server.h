@@ -5,6 +5,8 @@
 #define PIPE_ERROR 3
 #define WRITE_ERROR 4
 
+#define MAX_PROC 8
+
 /**
  * @brief Input data structure.
  * @param operations Array containing every operation to be executed on the file.
@@ -21,6 +23,8 @@ typedef struct input
     char *to;
 
     int priority;
+    int op_len;
+
     bool proc_file;
 
 } Input;

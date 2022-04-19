@@ -48,34 +48,58 @@ void raise_read_error()
 }
 
 /**
-* @brief Builds a struct from a String.
-*
-* @param string string with the info for the struct.
-* @return Built struct input.
-*/
+ * @brief Returns the number of operations on an input string.
+ * 
+ * @param string Input string.
+ * @return Number of operations (int).
+ */
+int get_commands_len(char *string)
+{
+    char *tok = strtok(string, " ");
+
+    int i = 0;
+    while(tok != NULL) 
+    {
+        i++;
+        tok = strtok(NULL, " \n");
+    }
+
+    return i - 4;
+}
+
+/**
+ * @brief Populates an Input struct when given a valid string.
+ * 
+ * @param string Input string.
+ * @param r Struct that will be populated.
+ */
 void create_input(char *string, Input *r)
 {
-    int i = 1;
-    r->proc_file = false;
+    int commands_len = get_commands_len(strdup(string));
+    r->op_len = commands_len;
 
-    char *buf = strtok(string, " ");
-    r->priority = atoi(buf);
+    char *argument = strtok(string, " ");
 
-    buf = strtok(NULL, " ");
-    r->from = strdup(buf);
+    if (strcmp(argument, "proc_file") == 0) r->proc_file = true;
+    else r->proc_file = false;
+
+    argument = strtok(NULL, " ");
+    r->priority = atoi(argument);
+
+    argument = strtok(NULL, " ");
+    r->from = strdup(argument);
+
+    argument = strtok(NULL, " ");
+    r->to = strdup(argument);
+
+    r->operations = malloc(sizeof(char) * commands_len * 16); 
     
-    buf = strtok(NULL, " ");
-    r->to = strdup(buf);
-    r->operations = malloc(sizeof(char*)*i);
-    
-    for (buf = strtok(NULL, " "); buf != NULL; i++)
+    int i = 0;
+    argument = strtok(NULL, " ");
+    while(argument != NULL) 
     {
-        if(strcmp(buf, "encrypt")) r->proc_file = true;
-
-        r->operations = realloc(r->operations, sizeof(char*)*i);
-        r->operations[i-1] = strdup(buf);
-
-        buf = strtok(NULL, " ");
+        r->operations[i++] = strdup(argument);
+        argument = strtok(NULL, " \n");
     }
 }
 
@@ -107,7 +131,6 @@ int compare_priorities(const void *a, const void *b)
  * @param i Input to insert in head.
  * @return New pointer to the head of the array.
  */
-
 Input* create_queue(Input *arr, Input i)
 {
     arr = malloc(sizeof(Input));
@@ -189,12 +212,17 @@ int pop_queue(Input *arr, int size, Input *r)
     return 1;
 }
 
+
+
 int main()
 {
     /*
     fd[0] - read
     fd[1] - write
     */
+
+    // Queue global que vai armazenar todos os pedidos.
+    Input *queue[1024];
 
     int input_com[2];
 
@@ -237,6 +265,7 @@ int main()
 
         // write(STDOUT_FILENO, "[!] Server is online!\n" , 23);
         // write(STDOUT_FILENO, "[*] Listening for data...\n", 27);
+        //? ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
 
         char arguments[BUFSIZ];
         while(true)
@@ -256,7 +285,12 @@ int main()
             }
             else if (strcmp(arguments, "") != 0) 
             {
-                printf("[sent>] %s\n\n", arguments);
+                // printf("[sent>] %s\n\n", arguments);
+
+                /* 
+                Se a string recebida não for vazia, então enviamos a string através de um pipe
+                para outro processo para o seu parsing e futuro armazenamento na queue.
+                */
 
                 int input_length = strlen(arguments) + 1; 
 
@@ -293,6 +327,7 @@ int main()
         /* 
         Parent Process 
         Recebe os pedidos pelo pipe do processo filho faz o parsing e armazena numa priority queue.
+        Todas as string recebidas neste lado do pipe são não vazias.
         */
        
         char input_string[BUFSIZ];
@@ -313,11 +348,14 @@ int main()
                 _exit(READ_ERROR);
             }
 
-            printf("[received<] %s\n", input_string);
+            //TODO Parsing da input_string e adicionar na queue.
+            Input *input = xmalloc(sizeof(Input));
+            create_input(input_string, input);
+
+            printf("[parsed] %d\n", input->priority);
 
             /* Reset buffer */
             memset(input_string, 0, BUFSIZ);
-
         }
         
         close(input_com[0]);
