@@ -19,25 +19,9 @@
 #include <sys/stat.h>
 
 #include "../includes/client.h"
+#include "../includes/utils.h"
 
 #define DEBUG
-
-/**
- * @brief A better version of malloc that removes the work of checking for error.
- * 
- * @param size Number of bytes to allocate.
- * @return Address of the new allocated memory block.
- */
-void *xmalloc(size_t size)
-{
-    void *result = malloc(size);
-    if (!result)
-    {
-        fprintf(stderr, "Failed to allocate memory (malloc error).\n");
-        return NULL;
-    }
-    return result;
-}
 
 /**
  * @brief Function that halts the execution because of an write error.
@@ -64,10 +48,14 @@ int main(int argc, char *argv[])
     Also, o enunciado diz para assumir que o input é sempre válido.
     */
 
-    if (argc < 6)
+
+    if (argc < 6 )
     {
-        fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
-        return FORMAT_ERROR;
+        if (!(argc == 2 && (strcmp(argv[1], "status") == 0)))
+        {
+            fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
+            return FORMAT_ERROR;
+        }
     }
 
     char *arguments = xmalloc(sizeof(char) * 32 * (argc - 1));

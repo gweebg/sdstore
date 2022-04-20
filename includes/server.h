@@ -1,11 +1,16 @@
 #pragma once
 
-#define READ_ERROR 1
-#define FORK_ERROR 2
-#define PIPE_ERROR 3
-#define WRITE_ERROR 4
-
 #define MAX_PROC 8
+#define QSIZE 1024
+
+typedef enum
+{
+    PENDING,
+    QUEUED,
+    EXECUTING,
+    COMPLETED
+
+} Status;
 
 /**
  * @brief Input data structure.
@@ -25,6 +30,8 @@ typedef struct input
     int priority;
     int op_len;
 
-    bool proc_file;
+    Status status;
 
 } Input;
+
+void *xmalloc(size_t size);

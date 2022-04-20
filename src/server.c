@@ -20,52 +20,8 @@
 #include <sys/wait.h>
 
 #include "../includes/server.h"
-
-/**
- * @brief A better version of malloc that removes the work of checking for error->
- * 
- * @param size Number of bytes to allocate.
- * @return Address of the new allocated memory block.
- */
-void *xmalloc(size_t size)
-{
-    void *result = malloc(size);
-    if (!result)
-    {
-        fprintf(stderr, "Failed to allocate memory (malloc error).\n");
-        return NULL;
-    }
-    return result;
-}
-
-/**
- * @brief Function that halts the execution because of an write error->
- */
-void raise_read_error()
-{
-    fprintf(stderr, "[!] Could not read from FIFO.\n");
-    exit(READ_ERROR);
-}
-
-/**
- * @brief Returns the number of operations on an input string.
- * 
- * @param string Input string.
- * @return Number of operations (int).
- */
-int get_commands_len(char *string)
-{
-    char *tok = strtok(string, " ");
-
-    int i = 0;
-    while(tok != NULL) 
-    {
-        i++;
-        tok = strtok(NULL, " \n");
-    }
-
-    return i - 4;
-}
+#include "../includes/utils.h"
+#include "../includes/queue.h"
 
 /**
  * @brief Populates an Input struct when given a valid string.
@@ -73,156 +29,59 @@ int get_commands_len(char *string)
  * @param string Input string.
  * @param r Struct that will be populated.
  */
-void create_input(char *string, Input *r)
+Input create_input(char *string)
 {
+    Input r;
+
     int commands_len = get_commands_len(strdup(string));
-    r->op_len = commands_len;
+    r.op_len = commands_len;
 
     char *argument = strtok(string, " ");
+    r.priority = atoi(argument);
 
-    if (strcmp(argument, "proc_file") == 0) r->proc_file = true;
-    else r->proc_file = false;
-
-    argument = strtok(NULL, " ");
-    r->priority = atoi(argument);
-
-    argument = strtok(NULL, " ");
-    r->from = strdup(argument);
+    if (r.priority < 0 || r.priority > 5)
+    {
+        write(STDERR_FILENO, "[!] Invalid priority value.\n", 29);
+        exit(FORMAT_ERROR);
+    }
 
     argument = strtok(NULL, " ");
-    r->to = strdup(argument);
+    r.from = strdup(argument);
 
-    r->operations = malloc(sizeof(char) * commands_len * 16); 
+    argument = strtok(NULL, " ");
+    r.to = strdup(argument);
+
+    r.operations = xmalloc(sizeof(char) * commands_len * 16); 
     
     int i = 0;
     argument = strtok(NULL, " ");
     while(argument != NULL) 
     {
-        r->operations[i++] = strdup(argument);
+        r.operations[i++] = strdup(argument);
         argument = strtok(NULL, " \n");
     }
+
+    return r;
 }
 
-/**
- * @brief Auxiliary function to compare priorities. Used in qsort.
- * 
- * @param a First element.
- * @param b Second element.
- * @return Returns in order for priorities to be decreasing (int). Invert signals to make it increase.
- */
-int compare_priorities(const void *a, const void *b)
-{
-    const Input *i1 = (const Input *)a;
-    const Input *i2 = (const Input *)b;
-
-    if (i1->priority < i2->priority)
-        return 1;
-
-    if (i1->priority > i2->priority)
-        return -1;
-
-    return 0;
-}
-
-/**
- * @brief Create a queue in case other functions find out the queue is empty and/or NULL.
- * 
- * @param arr Start of queue.
- * @param i Input to insert in head.
- * @return New pointer to the head of the array.
- */
-Input* create_queue(Input *arr, Input i)
-{
-    arr = malloc(sizeof(Input));
-    arr[0] = i;
-    return arr;
-}
-
-/**
- * @brief Adds a single element to the queue.
- * 
- * @param arr Start of the queue.
- * @param size Initial size of the queue before insertion.
- * @param i New member to insert.
- * @return 0 if new list was created, pos if insertion was successful, negative value otherwise.
- */
-int insert_elem(Input *arr, int size, Input i)
-{
-    if (size == 0)
-    {
-        arr = create_queue(arr, i);
-        return 0;
-    }
-
-    arr = realloc(arr, size+1);
-    if (arr == NULL) return -1;
-
-    arr[size] = i;
-
-    qsort(arr, size+1, sizeof(Input), compare_priorities);
-    return 1;
-}
-
-/**
- * @brief Concatenates two queues. Will free the second queue.
- * 
- * @param arr1 Array to be increased.
- * @param size1 Size of first array.
- * @param arr2 Array whose elements will be added.
- * @param size2 Size of second array.
- * @return Negative if one of the queues is empty, positive otherwise.
- */
-int cat_queues(Input *arr1, int size1, Input *arr2, int size2)
-{
-    arr1 = realloc(arr1, sizeof(Input) * (size1+size2));
-
-    if (arr1 == NULL || size1*size2 <= 0) return -1;
-
-    int i = size1, j = 0;
-    while (i < size1-1+size2 && j < size2)
-    {
-        arr1[i] = arr2[j];
-        i++;
-        j++;
-    }
-
-    qsort(arr1, size1+size2, sizeof(Input), compare_priorities);
-    free(arr2);
-    return 1;
-}
-
-/**
- * @brief Pops the first element of the queue to r.
- * 
- * @param arr Queue who (hopefully) is still sorted.
- * @param size Initial size of queue.
- * @param r Pointer to where the Element will be popped.
- * @return int If arr is empty or memmove messes up the queue returns neg, pos otherwise.
- */
-int pop_queue(Input *arr, int size, Input *r)
-{
-    if (arr == NULL) return -1;
-    
-    *r = arr[0];
-    memmove(arr, &arr[1], size-1);
-
-    arr = realloc(arr, sizeof(Input) * size-1);
-    if (arr == NULL) return -1;
-
-    return 1;
-}
-
-
-
-int main()
+int main(int argc, char *argv[])
 {
     /*
+    argv[0]: executable name
+    argv[1]: configuration file
+    argv[2]: operations directory
+
     fd[0] - read
     fd[1] - write
     */
 
-    // Queue global que vai armazenar todos os pedidos.
-    Input *queue[1024];
+    if (argc != 3)
+    {
+        write(STDERR_FILENO, "[!] Not enough arguments (expected 2).\n", 40);
+        return FORMAT_ERROR;
+    }
+
+    Configuration config = generate_config(argv[1]);
 
     int input_com[2];
 
@@ -263,8 +122,8 @@ int main()
         client_to_server = open(cts_fifo, O_RDONLY);
         server_to_client = open(stc_fifo, O_WRONLY);
 
-        // write(STDOUT_FILENO, "[!] Server is online!\n" , 23);
-        // write(STDOUT_FILENO, "[*] Listening for data...\n", 27);
+        write(STDOUT_FILENO, "[!] Server is online!\n" , 23);
+        write(STDOUT_FILENO, "[*] Listening for data...\n", 27);
         //? ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
 
         char arguments[BUFSIZ];
@@ -349,10 +208,6 @@ int main()
             }
 
             //TODO Parsing da input_string e adicionar na queue.
-            Input *input = xmalloc(sizeof(Input));
-            create_input(input_string, input);
-
-            printf("[parsed] %d\n", input->priority);
 
             /* Reset buffer */
             memset(input_string, 0, BUFSIZ);
