@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     {
         if (!(argc == 2 && (strcmp(argv[1], "status") == 0)))
         {
-            fprintf(stderr, "Not enought arguments.\nExpected at least 6 but got %d arguments, refer to the documentation for more information.\n", argc);
+            print_error("Not enought arguments. Expected at least 6 but got less, refer to the documentation for more information.\n");
             return FORMAT_ERROR;
         }
     }
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 
     if (client_to_server < 0 || server_to_client < 0)
     {
-        fprintf(stderr, "[!] Could not open at least one FIFO file (cts|stc).\n");
+        print_error("Could not open at least one FIFO file (cts|stc).\n");
         return OPEN_ERROR;
     }
 

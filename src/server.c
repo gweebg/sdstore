@@ -1,5 +1,5 @@
 /**
- * @file server->c
+ * @file server.c
  * @author gweebg ; johnny_longo 
  * @brief Server side of the application. 
  * @version 0.1
@@ -25,24 +25,24 @@
 
 /**
  * @brief Populates an Input struct when given a valid string.
- * 
- * @param string Input string.
- * @param r Struct that will be populated.
+ * @param string Input string to be 'converted' to a Input struct.
  */
 Input create_input(char *string)
 {
     Input r;
 
-    int commands_len = get_commands_len(strdup(string));
-    r.op_len = commands_len;
+    r.valid = 1;
+    r.op_len = get_commands_len(strdup(string));;
 
     char *argument = strtok(string, " ");
+
+    argument = strtok(NULL, " ");
     r.priority = atoi(argument);
 
     if (r.priority < 0 || r.priority > 5)
     {
-        write(STDERR_FILENO, "[!] Invalid priority value.\n", 29);
-        exit(FORMAT_ERROR);
+        print_error("Invalid priority value.\n");
+        r.valid = -1;
     }
 
     argument = strtok(NULL, " ");
@@ -51,7 +51,7 @@ Input create_input(char *string)
     argument = strtok(NULL, " ");
     r.to = strdup(argument);
 
-    r.operations = xmalloc(sizeof(char) * commands_len * 16); 
+    r.operations = xmalloc(sizeof(char) * r.op_len * 16); 
     
     int i = 0;
     argument = strtok(NULL, " ");
@@ -64,6 +64,15 @@ Input create_input(char *string)
     return r;
 }
 
+
+/**
+ * @brief Funtion that executes the whole server side.
+ * Handles client jobs and the configuration files.
+ * 
+ * @param argc Number or arguments.
+ * @param argv Array containing command line arguments.
+ * @return Error code (int).
+ */
 int main(int argc, char *argv[])
 {
     /*
@@ -77,7 +86,7 @@ int main(int argc, char *argv[])
 
     if (argc != 3)
     {
-        write(STDERR_FILENO, "[!] Not enough arguments (expected 2).\n", 40);
+        print_error("Not enough arguments (expected 2).\n");
         return FORMAT_ERROR;
     }
 
@@ -87,14 +96,14 @@ int main(int argc, char *argv[])
 
     if (pipe(input_com) == -1)
     {
-        printf("Something went wrong while creating the pipe.\n");
+        print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
     }
 
     pid_t pid_main = fork();
     if (pid_main < 0)
     {
-        printf("Something went wrong while creating a new process.\n");
+        print_error("Something went wrong while creating a new process.\n");
         return FORK_ERROR;
     }
 
@@ -119,12 +128,12 @@ int main(int argc, char *argv[])
         const char *stc_fifo = "com/stc";
         mkfifo(stc_fifo, 0666);
 
+        print_log("Server is online!\n");
+        print_log("Listening for data... \n");
+        // ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
+
         client_to_server = open(cts_fifo, O_RDONLY);
         server_to_client = open(stc_fifo, O_WRONLY);
-
-        write(STDOUT_FILENO, "[!] Server is online!\n" , 23);
-        write(STDOUT_FILENO, "[*] Listening for data...\n", 27);
-        //? ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
 
         char arguments[BUFSIZ];
         while(true)
@@ -139,8 +148,12 @@ int main(int argc, char *argv[])
             // TODO Para tornar mais eficiente convém mandar primeiro o tamanho da string.
             if (read(client_to_server, arguments, BUFSIZ) < 0) 
             {
-                fprintf(stderr, "[!] Could not read from FIFO.\n");
+                print_error("Could not read from FIFO.\n");
                 _exit(READ_ERROR);
+            }
+            else if (strcmp(arguments, "status") == 0)
+            {
+                print_info("[?] Status requested.\n");
             }
             else if (strcmp(arguments, "") != 0) 
             {
@@ -155,13 +168,13 @@ int main(int argc, char *argv[])
 
                 if (write(input_com[1], &input_length, sizeof(int)) < 0)
                 {
-                    printf("Something went wrong while writing to pipe.\n");
+                    write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
                     _exit(WRITE_ERROR);
                 }
 
                 if (write(input_com[1], arguments, sizeof(char) * input_length) < 0)
                 {
-                    printf("Something went wrong while writing to pipe.\n");
+                    write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
                    _exit(WRITE_ERROR);
                 }
             }
@@ -197,17 +210,24 @@ int main(int argc, char *argv[])
 
             if (read(input_com[0], &size, sizeof(int)) < 0)
             {
-                printf("Something went wrong while reading from pipe.\n");
+                print_error("Something went wrong while reading from pipe.\n");
                 _exit(READ_ERROR);
             }
 
             if (read(input_com[0], input_string, sizeof(char) * size) < 0)
             {
-                printf("Something went wrong while reading from pipe.\n");
+                print_error("Something went wrong while reading from pipe.\n");
                 _exit(READ_ERROR);
             }
 
-            //TODO Parsing da input_string e adicionar na queue.
+            // TODO Parsing da input_string e adicionar na queue.
+            Input current_job = create_input(input_string);
+            printf("%d\n", current_job.valid);
+            printf("%d\n", current_job.priority);
+            printf("%s\n", current_job.from);
+            printf("%s\n", current_job.to);
+
+
 
             /* Reset buffer */
             memset(input_string, 0, BUFSIZ);

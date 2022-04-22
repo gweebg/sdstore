@@ -9,8 +9,21 @@
 #define FORK_ERROR   7
 #define PIPE_ERROR   8
 
+#define QSIZE        1024
+
 #include <stdlib.h>
 
+/**
+ * @brief Struct that stores the number of times an operation can run at the same time.
+ * 
+ * @param nop
+ * @param bcompress
+ * @param bdecompress
+ * @param gcompress
+ * @param gdecompress
+ * @param encrypt
+ * @param decrypt
+ */
 typedef struct config
 {
     int nop,
@@ -23,6 +36,14 @@ typedef struct config
 
 } Configuration;
 
-void *xmalloc(size_t size);
-int get_commands_len(char *string);
 Configuration generate_config(char *path);
+
+int get_commands_len(char *string);
+
+void *xmalloc(size_t size);
+
+void print_error(char *content);
+
+void print_info(char *content);
+
+void print_log(char *content);
