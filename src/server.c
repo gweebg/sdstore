@@ -23,6 +23,10 @@
 #include "../includes/utils.h"
 #include "../includes/queue.h"
 
+/* Global Variables */
+int in_use_operations[6];
+
+
 /**
  * @brief Populates an Input struct when given a valid string.
  * @param string Input string to be 'converted' to a Input struct.
@@ -92,6 +96,10 @@ int main(int argc, char *argv[])
 
     Configuration config = generate_config(argv[1]);
 
+    PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + 
+                                    sizeof(Input) * QSIZE);
+    init_queue(pqueue);
+
     int input_com[2];
 
     if (pipe(input_com) == -1)
@@ -110,7 +118,7 @@ int main(int argc, char *argv[])
     if (pid_main == 0)
     {
         /* 
-        Child Process
+        !Child Process (Main)
         Listener dos pedidos enviados pelo servidor e tambem, atraves de um pipe, envia o pedido
         para o processo pai para que este seja armazenado de acordo com a prioridade numa priority
         queue. 
@@ -123,18 +131,17 @@ int main(int argc, char *argv[])
         const char *cts_fifo = "com/cts";
         mkfifo(cts_fifo, 0666);
 
-        /* stc <=> server_to_client */
-        int server_to_client;
-        const char *stc_fifo = "com/stc";
-        mkfifo(stc_fifo, 0666);
-
         print_log("Server is online!\n");
         print_log("Listening for data... \n");
         // ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
 
         client_to_server = open(cts_fifo, O_RDONLY);
-        server_to_client = open(stc_fifo, O_WRONLY);
-
+        if (client_to_server < 0) 
+        {
+            print_error("Failed to open FIFO <cts in server.c>\n");
+            _exit(OPEN_ERROR);
+        }
+    
         char arguments[BUFSIZ];
         while(true)
         {
@@ -145,7 +152,6 @@ int main(int argc, char *argv[])
             else if (read_bytes != 0) printf("[>] %d\n", args_len);
             */
 
-            // TODO Para tornar mais eficiente convém mandar primeiro o tamanho da string.
             if (read(client_to_server, arguments, BUFSIZ) < 0) 
             {
                 print_error("Could not read from FIFO.\n");
@@ -157,13 +163,11 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(arguments, "") != 0) 
             {
-                // printf("[sent>] %s\n\n", arguments);
-
                 /* 
                 Se a string recebida não for vazia, então enviamos a string através de um pipe
                 para outro processo para o seu parsing e futuro armazenamento na queue.
                 */
-
+                
                 int input_length = strlen(arguments) + 1; 
 
                 if (write(input_com[1], &input_length, sizeof(int)) < 0)
@@ -184,59 +188,98 @@ int main(int argc, char *argv[])
         }
 
         close(client_to_server);
-        close(server_to_client);
         close(input_com[1]);
-
-        /*
-        unlink(cts_fifo);
-        unlink(stc_fifo);
-        */
 
         _exit(EXIT_SUCCESS);
     }
     else
     {
         /* 
-        Parent Process 
+        !Parent Process (Main)
         Recebe os pedidos pelo pipe do processo filho faz o parsing e armazena numa priority queue.
         Todas as string recebidas neste lado do pipe são não vazias.
         */
-       
-        char input_string[BUFSIZ];
-        while (true)
+
+        /* stc <=> server_to_client */
+        int server_to_client;
+        const char *stc_fifo = "com/stc";
+        mkfifo(stc_fifo, 0666);
+
+        server_to_client = open(stc_fifo, O_WRONLY);
+        if (server_to_client < 0) 
         {
-            close(input_com[1]);
-            int size;
-
-            if (read(input_com[0], &size, sizeof(int)) < 0)
-            {
-                print_error("Something went wrong while reading from pipe.\n");
-                _exit(READ_ERROR);
-            }
-
-            if (read(input_com[0], input_string, sizeof(char) * size) < 0)
-            {
-                print_error("Something went wrong while reading from pipe.\n");
-                _exit(READ_ERROR);
-            }
-
-            // TODO Parsing da input_string e adicionar na queue.
-            Input current_job = create_input(input_string);
-            printf("%d\n", current_job.valid);
-            printf("%d\n", current_job.priority);
-            printf("%s\n", current_job.from);
-            printf("%s\n", current_job.to);
-
-
-
-            /* Reset buffer */
-            memset(input_string, 0, BUFSIZ);
+            print_error("Failed to open FIFO <sct in server.c>\n");
+            _exit(OPEN_ERROR);
         }
-        
-        close(input_com[0]);
-        _exit(EXIT_SUCCESS);
+
+        pid_t pid_dispacher = fork();
+        if (pid_dispacher < 0)
+        {
+            print_error("Something went wrong while creating a new process.\n");
+            return FORK_ERROR;
+        }
+
+        if (pid_dispacher == 0)
+        {
+            /*
+            !Child Process (Dispacher)
+            Takes a string sent from the pipe (main), parses it and inserts the, newly originated,
+            Input struct into the priority queue.
+            */
+
+            char input_string[BUFSIZ];
+            while (true)
+            {
+                close(input_com[1]);
+                int size;
+
+                if (read(input_com[0], &size, sizeof(int)) < 0)
+                {
+                    print_error("Something went wrong while reading from pipe.\n");
+                    _exit(READ_ERROR);
+                }
+
+                if (read(input_com[0], input_string, sizeof(char) * size) < 0)
+                {
+                    print_error("Something went wrong while reading from pipe.\n");
+                    _exit(READ_ERROR);
+                }
+
+                Input current_job = create_input(input_string);
+                
+                if (current_job.valid == 1)
+                {
+                    push(pqueue, current_job);
+                    print_info("Added a new job to the queue\n");
+                    if (write(server_to_client, &(current_job.status), sizeof(int)) < 0)
+                    {
+                        print_error("Failed to write to FIFO <stc in server.c>\n");
+                        _exit(WRITE_ERROR);
+                    }
+                }
+
+                /* Reset buffer */
+                memset(input_string, 0, BUFSIZ);
+            }
+
+            close(input_com[0]);
+            _exit(EXIT_SUCCESS);
+        }
+        else
+        {
+            /*
+            !Parent Process (Dispacher)
+            On an infinite loop this process pops the elements from the queue and tries to execute it, 
+            according to the in_use_operations array.
+            */
+
+           
+        }
+
+        wait(NULL); // Espera pelo processo 'child process (dispacher)'.
+        close(server_to_client);
     }
 
-    wait(NULL);
+    wait(NULL); // Espera pelo processo 'child process (main)'.
     return 0;
 }

@@ -48,7 +48,6 @@ int main(int argc, char *argv[])
     Also, o enunciado diz para assumir que o input é sempre válido.
     */
 
-
     if (argc < 6 )
     {
         if (!(argc == 2 && (strcmp(argv[1], "status") == 0)))
@@ -95,6 +94,41 @@ int main(int argc, char *argv[])
 
     /* Acaba a comunicação por isso fechamos os FIFOS do lado do client. */
     close(client_to_server);
+
+    int message;
+    while(true)
+    {
+        if (read(server_to_client, &message, sizeof(int)) < 0) 
+        {
+            print_error("Could not read from FIFO. <stc in client.c>\n");
+            _exit(READ_ERROR);
+        }
+        
+        switch (message)
+        {
+            case 0:
+                print_info("Pending...\n");
+                break;
+
+            case 1:
+                print_info("Queued up...\n");
+                break;
+
+            case 2: 
+                print_info("Executing...\n");
+                break;
+
+            case 3:
+                print_info("Finished!\n");
+                break;
+
+            default:
+                print_error("Unknown message code.\n");
+                return UNKNOWN_MESSAGE_ERROR;
+        }                
+    }
+
+    /* Closes communication between server --> client */
     close(server_to_client);
 
     return 0;
