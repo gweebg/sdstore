@@ -94,6 +94,33 @@ int main(int argc, char *argv[])
         return FORMAT_ERROR;
     }
 
+    /* cts <=> client_to_server */
+    int client_to_server;
+    const char *cts_fifo = "com/cts";
+    mkfifo(cts_fifo, 0666);
+
+    /* stc <=> server_to_client */
+    int server_to_client;
+    const char *stc_fifo = "com/stc";
+    mkfifo(stc_fifo, 0666);
+
+    print_log("Server is online!\n");
+    print_log("Listening for data... \n");
+
+    client_to_server = open(cts_fifo, O_RDONLY);
+    if (client_to_server < 0) 
+    {
+        print_error("Failed to open FIFO <cts in server.c>\n");
+        _exit(OPEN_ERROR);
+    }
+
+    server_to_client = open(stc_fifo, O_WRONLY);
+    if (server_to_client < 0) 
+    {
+        print_error("Failed to open FIFO <sct in server.c>\n");
+        _exit(OPEN_ERROR);
+    }
+
     Configuration config = generate_config(argv[1]);
 
     PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + 
@@ -126,23 +153,6 @@ int main(int argc, char *argv[])
 
         close(input_com[0]);
 
-        /* cts <=> client_to_server */
-        int client_to_server;
-        const char *cts_fifo = "com/cts";
-        mkfifo(cts_fifo, 0666);
-
-        print_log("Server is online!\n");
-        print_log("Listening for data... \n");
-        // ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
-        // ./bcompress < in.txt | ./nop | ./gcompress | ./encrypt | ./nop > out.txt
-
-        client_to_server = open(cts_fifo, O_RDONLY);
-        if (client_to_server < 0) 
-        {
-            print_error("Failed to open FIFO <cts in server.c>\n");
-            _exit(OPEN_ERROR);
-        }
-    
         char arguments[BUFSIZ];
         while(true)
         {
@@ -158,17 +168,44 @@ int main(int argc, char *argv[])
                 print_error("Could not read from FIFO.\n");
                 _exit(READ_ERROR);
             }
-            else if (strcmp(arguments, "status") == 0)
+            else if (strncmp(arguments, "help", 4) == 0)
             {
-                print_info("[?] Status requested.\n");
+                char *help_menu = "usage: ./client [mode] priority input_file output_file [operations]\n"
+                                  "Submit jobs to be executed.\n"
+                                  "Options and arguments:\n"
+                                  "Modes:\n"
+                                  "proc-file   : submit a job to the server, requires [0<=priority<=5], [input_file], [output_file] and [operations]\n"
+                                  "status      : display a status message containing the status of the server (./client status)\n"
+                                  "help        : display this message (./client help)\n"
+                                  "Operations:\n"
+                                  "nop         : just a nop, does nothing\n"
+                                  "gcompress   : compresses the file with the format gzip\n"
+                                  "gdecompress : decompresses the file which format is gzip\n"
+                                  "bcompress   : compresses the file with the format bzip\n"
+                                  "bdecompress : decompresses the file which format is bzip\n"
+                                  "encrypt     : encrypts the file (ccrypt)\n"
+                                  "decrypt     : decrypts the file (ccrypt)\n"
+                                  "Do not forget to start the server application before running a request. Otherwise you will get a deadlock.\n";
+
+                int message = 4;
+                if (write(server_to_client, &message, sizeof(int)) < 0)
+                {
+                    print_error("Could not write into FIFO. <stc> in server.c\n");
+                    _exit(WRITE_ERROR);
+                }
+
+                if (write(server_to_client, help_menu, strlen(help_menu)) < 0)
+                {
+                    print_error("Could not write into FIFO. <stc> in server.c\n");
+                    _exit(WRITE_ERROR);
+                }
             }
             else if (strcmp(arguments, "") != 0) 
             {
                 /* 
                 Se a string recebida não for vazia, então enviamos a string através de um pipe
                 para outro processo para o seu parsing e futuro armazenamento na queue.
-                */
-                
+                */                
                 int input_length = strlen(arguments) + 1; 
 
                 if (write(input_com[1], &input_length, sizeof(int)) < 0)
@@ -200,18 +237,6 @@ int main(int argc, char *argv[])
         Recebe os pedidos pelo pipe do processo filho faz o parsing e armazena numa priority queue.
         Todas as string recebidas neste lado do pipe são não vazias.
         */
-
-        /* stc <=> server_to_client */
-        int server_to_client;
-        const char *stc_fifo = "com/stc";
-        mkfifo(stc_fifo, 0666);
-
-        server_to_client = open(stc_fifo, O_WRONLY);
-        if (server_to_client < 0) 
-        {
-            print_error("Failed to open FIFO <sct in server.c>\n");
-            _exit(OPEN_ERROR);
-        }
 
         pid_t pid_dispacher = fork();
         if (pid_dispacher < 0)

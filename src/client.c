@@ -28,7 +28,7 @@
  */
 void raise_write_error()
 {
-    fprintf(stderr, "[!] Could not write to FIFO.\n");
+    write(STDERR_FILENO, "[!] Could not write to FIFO.\n", 30);
     exit(WRITE_ERROR);
 }
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 
     if (argc < 6 )
     {
-        if (!(argc == 2 && (strcmp(argv[1], "status") == 0)))
+        if (!(argc == 2 && ((strcmp(argv[1], "status") == 0) || (strcmp(argv[1], "help") == 0))))
         {
             print_error("Not enought arguments. Expected at least 6 but got less, refer to the documentation for more information.\n");
             return FORMAT_ERROR;
@@ -87,6 +87,7 @@ int main(int argc, char *argv[])
 
     /* Enviar a string que contem os argumentos (str) */
     int args_len = strlen(arguments) + 1;
+
     // if (write(client_to_server, &args_len, sizeof(int)) < 0) raise_write_error();  /* Primeiro enviar o tamanho da string */
     if (write(client_to_server, arguments, args_len) < 0) raise_write_error(); /* E depois a string */
     
@@ -101,7 +102,7 @@ int main(int argc, char *argv[])
         if (read(server_to_client, &message, sizeof(int)) < 0) 
         {
             print_error("Could not read from FIFO. <stc in client.c>\n");
-            _exit(READ_ERROR);
+            return READ_ERROR;
         }
         
         switch (message)
@@ -121,6 +122,22 @@ int main(int argc, char *argv[])
             case 3:
                 print_info("Finished!\n");
                 break;
+
+            case 4: // Help
+                char help_menu[BUFSIZ];
+                if (read(server_to_client, help_menu, BUFSIZ) < 0)
+                {
+                    print_error("Could not read from FIFO. <stc> in client.c");
+                    return READ_ERROR;
+                }
+
+                if (write(STDOUT_FILENO, help_menu, strlen(help_menu)) < 0)
+                {
+                    print_error("Could not write to STDOUT_FILENO.");
+                    return WRITE_ERROR; 
+                }
+
+                return EXIT_SUCCESS;
 
             default:
                 print_error("Unknown message code.\n");
