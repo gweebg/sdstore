@@ -134,6 +134,7 @@ int main(int argc, char *argv[])
         print_log("Server is online!\n");
         print_log("Listening for data... \n");
         // ./nop < in.txt | ./encrypt | ./gcompress | ./nop > out.txt
+        // ./bcompress < in.txt | ./nop | ./gcompress | ./encrypt | ./nop > out.txt
 
         client_to_server = open(cts_fifo, O_RDONLY);
         if (client_to_server < 0) 
