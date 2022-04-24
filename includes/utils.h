@@ -8,7 +8,9 @@
 #define READ_ERROR   6
 #define FORK_ERROR   7
 #define PIPE_ERROR   8
-#define UNKNOWN_MESSAGE_ERROR 9
+#define DUP2_ERROR   9
+#define EXEC_ERROR   10
+#define UNKNOWN_MESSAGE_ERROR 11
 
 #define QSIZE        1024
 

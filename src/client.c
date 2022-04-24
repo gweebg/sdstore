@@ -139,6 +139,9 @@ int main(int argc, char *argv[])
 
                 return EXIT_SUCCESS;
 
+            case 5: // Status
+                break;
+
             default:
                 print_error("Unknown message code.\n");
                 return UNKNOWN_MESSAGE_ERROR;

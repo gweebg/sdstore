@@ -23,15 +23,22 @@ typedef enum
  * @param to Output path.
  * @param priority Priority of the job.
  * @param status Enum with the current status of the job.
+ * @param desc Description string of the job.
+ * @param id Job id.
+ * @param valid Boolean value that represents whether a job is valid or not.
+ * @param op_len Number of operations of the job.
  */
 typedef struct input 
 {
     char **operations;
-    Status status;
 
     char *from;
     char *to;
+    char *desc;
 
+    Status status;
+
+    int id;
     int priority;
     int op_len;
     int valid;

@@ -22,21 +22,109 @@
 #include "../includes/server.h"
 #include "../includes/utils.h"
 #include "../includes/queue.h"
+#include "../includes/execute.h"
 
 /* Global Variables */
-int in_use_operations[6];
+int in_use_operations[7] = {0}; /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
+Input in_execution_jobs[1024] = {0};
+int active_jobs = 0, job_number = 0;
 
+/**
+ * @brief A function that parses 'in_use_operations' and 'in_execution_jobs' array into a string
+ * and displays as status.
+ * @param config Configuration struct containing operation limits.
+ * @return The generated status string (char*).
+ */
+/*
+char *generate_status(Configuration config)
+{
+    char *operation_status = xmalloc(sizeof(char) * 512);
+    sprintf(operation_status, "resources status (now/max):\n" 
+                              "operation nop: %d/%d\n"
+                              "operation gcompress: %d/%d\n"
+                              "operation gdecompress: %d/%d\n"
+                              "operation bcompress: %d/%d\n"
+                              "operation bdecompress: %d/%d\n"
+                              "operation encrypt: %d/%d\n"
+                              "operation decrypt: %d/%d\n", 
+                              in_use_operations[0], config.nop,
+                              in_use_operations[1], config.gcompress,
+                              in_use_operations[2], config.gdecompress,
+                              in_use_operations[3], config.bcompress,
+                              in_use_operations[4], config.bdecompress,
+                              in_use_operations[5], config.encrypt,
+                              in_use_operations[6], config.decrypt);
+
+    char *job_status = xmalloc(sizeof(char) * 512);
+    strncpy(job_status, "job status (job_id (status_code): job):\n", 27);   
+
+    if (active_jobs != 0)
+        for (int i = 0; i < active_jobs; i++)
+        {
+            char *temp = xmalloc(sizeof(char) * 32);        
+            sprintf(temp, "job #%d (%d): %s\n", in_execution_jobs[i].id,
+                                                in_execution_jobs[i].status,
+                                                in_execution_jobs[i].desc);
+
+            strncat(job_status, temp, strlen(temp) + 1);
+            free(temp);
+        }   
+
+    char result[BUFSIZ];
+    sprintf(result, "%s%s", job_status, operation_status);
+    return result;      
+}
+*/
+
+/**
+ * @brief Checks if there are enough resources to run a job.
+ * Does this by checking the 'in_use_operations' array.
+ * @param job Job to be checked.
+ * @param config Configuration object with the limit values.
+ * @return true, if there are enough resources, false otherwise.
+ */
+bool check_resources(Input job, Configuration config)
+{
+    Configuration num_operations_per_type = {0}; /* Set all values to 0. */
+
+    /* Counting the number of operations of the job */
+    for (int i = 0; i < job.op_len; i++)
+    {
+        if (strcmp(job.operations[i], "nop") == 0) num_operations_per_type.nop++;
+        else if (strcmp(job.operations[i], "gcompress") == 0) num_operations_per_type.gcompress++;
+        else if (strcmp(job.operations[i], "gdecompress") == 0) num_operations_per_type.gdecompress++;
+        else if (strcmp(job.operations[i], "bcompress") == 0) num_operations_per_type.bcompress++;
+        else if (strcmp(job.operations[i], "bdecompress") == 0) num_operations_per_type.bdecompress++;
+        else if (strcmp(job.operations[i], "encrypt") == 0) num_operations_per_type.encrypt++;
+        else num_operations_per_type.decrypt++;
+    }
+
+    /* Checking for excess resources */
+    if (num_operations_per_type.nop + in_use_operations[0] > config.nop) return false;
+    if (num_operations_per_type.gcompress + in_use_operations[1] > config.gcompress) return false;
+    if (num_operations_per_type.gdecompress + in_use_operations[2] > config.gdecompress) return false;
+    if (num_operations_per_type.bcompress + in_use_operations[3] > config.bcompress) return false;
+    if (num_operations_per_type.bdecompress + in_use_operations[4] > config.bdecompress) return false;
+    if (num_operations_per_type.encrypt + in_use_operations[5] > config.encrypt) return false;
+    if (num_operations_per_type.decrypt + in_use_operations[6] > config.decrypt) return false;
+
+    return true;
+}
 
 /**
  * @brief Populates an Input struct when given a valid string.
  * @param string Input string to be 'converted' to a Input struct.
+ * @param exec_path Path where the custom (or not) executables are.
  */
-Input create_input(char *string)
+Input create_input(char *string, char *exec_path)
 {
     Input r;
 
+    r.id = job_number++;
+    r.status = PENDING;
     r.valid = 1;
-    r.op_len = get_commands_len(strdup(string));;
+    r.desc = strdup(string);
+    r.op_len = get_commands_len(strdup(string));
 
     char *argument = strtok(string, " ");
 
@@ -61,7 +149,12 @@ Input create_input(char *string)
     argument = strtok(NULL, " ");
     while(argument != NULL) 
     {
-        r.operations[i++] = strdup(argument);
+        char *temp = xmalloc(sizeof(char) * (strlen(exec_path) + strlen(argument) + 1));
+        sprintf(temp, "%s/%s", exec_path, argument);
+
+        r.operations[i++] = strdup(temp);
+
+        free(temp);
         argument = strtok(NULL, " \n");
     }
 
@@ -200,6 +293,11 @@ int main(int argc, char *argv[])
                     _exit(WRITE_ERROR);
                 }
             }
+            else if (strncmp(arguments, "status", 6) == 0)
+            {
+                // char *status_string = generate_status(config);
+                print_log("Status requested.\n");
+            }
             else if (strcmp(arguments, "") != 0) 
             {
                 /* 
@@ -271,11 +369,12 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                Input current_job = create_input(input_string);
+                Input current_job = create_input(input_string, argv[2]);
                 
                 if (current_job.valid == 1)
                 {
                     push(pqueue, current_job);
+                    printf("size push: %d\n", pqueue->size);
                     print_info("Added a new job to the queue\n");
                     if (write(server_to_client, &(current_job.status), sizeof(int)) < 0)
                     {
@@ -299,7 +398,31 @@ int main(int argc, char *argv[])
             according to the in_use_operations array.
             */
 
-           
+            printf("size: %d\n", pqueue->size);
+            while (true)
+            {
+                if (!is_empty(pqueue))
+                {
+                    print_log("Entrei !is_empty(pqueue).\n");
+                    Input job = pop(pqueue);
+                    print_log(job.desc);
+                    int executed = false;
+
+                    while (!executed)
+                    {
+                        print_log("Entrei !executed loop.\n");
+                        if (check_resources(job, config)) 
+                        {
+                            print_log("Entrei check_resources.\n");
+                            // update_val();
+                            execute(job);
+                            // update_val();
+
+                            executed = false;
+                        }
+                    }
+                }
+            }
         }
 
         wait(NULL); // Espera pelo processo 'child process (dispacher)'.

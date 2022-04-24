@@ -17,6 +17,8 @@ typedef struct PriorityQueue
 
 void init_queue(PriorityQueue *queue);
 
+bool is_empty(PriorityQueue *queue);
+
 int compare_input(const void *a, const void *b);
 
 void push(PriorityQueue *queue, Input input);

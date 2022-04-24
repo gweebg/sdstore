@@ -20,6 +20,18 @@ void init_queue(PriorityQueue *queue)
 }
 
 /**
+ * @brief Checks if a priority queue is empty or not.
+ * 
+ * @param queue Input queue.
+ * @return true, if the queue is empty, false otherwise.
+ */
+bool is_empty(PriorityQueue *queue)
+{
+    if (queue->size == 0) return true;
+    else return false;
+}
+
+/**
  * @brief Compares to Input elements. Used in sorting by the qsort function.
  *
  * @param a First element to compare.
@@ -52,7 +64,8 @@ void push(PriorityQueue *queue, Input input)
         else queue->values = queue_temp;
     }
 
-    queue->values[queue->size++] = input;
+    queue->values[queue->size] = input;
+    queue->size = queue->size + 1;
     qsort(queue->values, queue->size, sizeof(Input), &compare_input);
 }
 
@@ -69,7 +82,6 @@ Input pop(PriorityQueue *queue)
     {
         Input elem = queue->values[queue->size - 1];
         queue->size--;
-        qsort(queue->values, queue->size, sizeof(Input), &compare_input);
         return elem;
     }
     else 
