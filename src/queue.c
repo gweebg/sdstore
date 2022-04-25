@@ -15,7 +15,7 @@
  */
 void init_queue(PriorityQueue *queue)
 {
-    queue->values = xmalloc(sizeof(Input) * QSIZE);
+    queue->values = xmalloc(sizeof(PreProcessedInput) * QSIZE);
     queue->size = 0;
 }
 
@@ -40,8 +40,8 @@ bool is_empty(PriorityQueue *queue)
  */
 int compare_input(const void *a, const void *b)
 {
-    Input *input_a = *(Input **)a;
-    Input *input_b = *(Input **)b;
+    PreProcessedInput *input_a = *(PreProcessedInput **)a;
+    PreProcessedInput *input_b = *(PreProcessedInput **)b;
 
     if (input_a->priority < input_b->priority) return -1;
     if (input_a->priority > input_b->priority) return 1;
@@ -54,11 +54,11 @@ int compare_input(const void *a, const void *b)
  * @param queue Queue where to store the element.
  * @param input Element to store.
  */
-void push(PriorityQueue *queue, Input input)
+void push(PriorityQueue *queue, PreProcessedInput input)
 {
     if (queue->size == QSIZE)
     {
-        Input *queue_temp = realloc(queue->values, queue->size * sizeof(Input));
+        PreProcessedInput *queue_temp = realloc(queue->values, queue->size * sizeof(PreProcessedInput));
 
         if (queue_temp == NULL) print_error("Failed to allocate memory.\n");
         else queue->values = queue_temp;
@@ -66,7 +66,7 @@ void push(PriorityQueue *queue, Input input)
 
     queue->values[queue->size] = input;
     queue->size = queue->size + 1;
-    qsort(queue->values, queue->size, sizeof(Input), &compare_input);
+    qsort(queue->values, queue->size, sizeof(PreProcessedInput), &compare_input);
 }
 
 /**
@@ -75,19 +75,19 @@ void push(PriorityQueue *queue, Input input)
  * @param queue Queue where to pop from.
  * @return The popped element.
  */
-Input pop(PriorityQueue *queue)
+PreProcessedInput pop(PriorityQueue *queue)
 {
 
     if (queue->size != QSIZE)
     {
-        Input elem = queue->values[queue->size - 1];
+        PreProcessedInput elem = queue->values[queue->size - 1];
         queue->size--;
         return elem;
     }
     else 
     {
         print_log("The queue is empty.\n");
-        Input error = {.valid = -1};
+        PreProcessedInput error = {.valid = -1};
         return error;
     }
 }
@@ -96,8 +96,8 @@ Input pop(PriorityQueue *queue)
  * @brief Helper function to print out every operation of an Input element.
  * 
  * @param s Input struct.
- */
-void dump_ops(Input s)
+
+void dump_ops(PreProcessedInput s)
 {
     for (int i = 0; i < s.op_len; i++)
     {
@@ -105,6 +105,7 @@ void dump_ops(Input s)
     }
     printf("\n");
 }
+*/
 
 /*
 int main()

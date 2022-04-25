@@ -10,7 +10,7 @@
  */
 typedef struct PriorityQueue 
 {
-    Input *values;
+    PreProcessedInput *values;
     int size;
 
 } PriorityQueue;
@@ -21,9 +21,9 @@ bool is_empty(PriorityQueue *queue);
 
 int compare_input(const void *a, const void *b);
 
-void push(PriorityQueue *queue, Input input);
+void push(PriorityQueue *queue, PreProcessedInput input);
 
-Input pop(PriorityQueue *queue);
+PreProcessedInput pop(PriorityQueue *queue);
 
-void dump_ops(Input s);
+/* void dump_ops(Input s); */
 

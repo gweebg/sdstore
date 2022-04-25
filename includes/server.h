@@ -1,5 +1,8 @@
 #pragma once
 
+#define POP -1
+#define EMPTY -2
+
 /**
  * @brief Status enum that describes the progress of a job.
  * @param PENDING The job was read but not yet queued to be executed.
@@ -15,6 +18,25 @@ typedef enum
     COMPLETED
 
 } Status;
+
+/**
+ * @brief PreProcessedInput struct, a structure that contains a job with only its priority parsed.
+ * @param priority The priority of the job.
+ * @param id The job id.
+ * @param desc The job description in string format (what comes through the named pipe).
+ * @param valid Indicates whether the job is valid of not.
+ */
+typedef struct ppinput
+{
+    char *desc;
+    
+    int priority, 
+        id, 
+        valid;
+
+    Status status;
+
+} PreProcessedInput;
 
 /**
  * @brief Input data structure.

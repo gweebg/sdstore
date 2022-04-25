@@ -28,6 +28,7 @@
 int in_use_operations[7] = {0}; /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
 Input in_execution_jobs[1024] = {0};
 int active_jobs = 0, job_number = 0;
+bool queue_in_use = false;
 
 /**
  * @brief A function that parses 'in_use_operations' and 'in_execution_jobs' array into a string
@@ -112,37 +113,65 @@ bool check_resources(Input job, Configuration config)
 }
 
 /**
+ * @brief Create a PreProcessedInput object.
+ * 
+ * @param string Input string to be 'converted' to a PreProcessedInput struct.
+ * @return PreProcessedInput 
+ */
+PreProcessedInput create_ppinput(char *string)
+{
+    PreProcessedInput p;
+    p.valid = 1;
+    p.id = job_number;
+    p.desc = strdup(string);
+    p.status = PENDING;
+    
+    char *priority = strtok(string, " ");
+    priority = strtok(NULL, " ");
+
+    p.priority = atoi(priority);
+    if (p.priority < 0 || p.priority > 5)
+    {
+        print_error("Invalid priority value.\n");
+        p.valid = -1;
+    }
+
+    job_number++;
+    return p;
+}
+
+/**
  * @brief Populates an Input struct when given a valid string.
+ * 
  * @param string Input string to be 'converted' to a Input struct.
  * @param exec_path Path where the custom (or not) executables are.
  */
-Input create_input(char *string, char *exec_path)
+Input create_input(PreProcessedInput base, char *exec_path)
 {
     Input r;
 
-    r.id = job_number++;
-    r.status = PENDING;
-    r.valid = 1;
-    r.desc = strdup(string);
-    r.op_len = get_commands_len(strdup(string));
+    r.id = base.id;
+    r.status = EXECUTING;
+    r.valid = base.valid;
+    r.desc = strdup(base.desc);
 
-    char *argument = strtok(string, " ");
+    r.op_len = get_commands_len(strdup(base.desc));
 
+    char *argument = strtok(base.desc, " ");
+
+    /* Setting priority */
     argument = strtok(NULL, " ");
-    r.priority = atoi(argument);
+    r.priority = base.priority;
 
-    if (r.priority < 0 || r.priority > 5)
-    {
-        print_error("Invalid priority value.\n");
-        r.valid = -1;
-    }
-
+    /* Setting input path */
     argument = strtok(NULL, " ");
     r.from = strdup(argument);
 
+    /* Setting output path */
     argument = strtok(NULL, " ");
     r.to = strdup(argument);
 
+    /* Setting operations */
     r.operations = xmalloc(sizeof(char) * r.op_len * 16); 
     
     int i = 0;
@@ -160,7 +189,6 @@ Input create_input(char *string, char *exec_path)
 
     return r;
 }
-
 
 /**
  * @brief Funtion that executes the whole server side.
@@ -217,12 +245,12 @@ int main(int argc, char *argv[])
     Configuration config = generate_config(argv[1]);
 
     PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + 
-                                    sizeof(Input) * QSIZE);
+                                    sizeof(PreProcessedInput) * QSIZE);
     init_queue(pqueue);
 
-    int input_com[2];
+    int input_com[2], dispacher_com[2];
 
-    if (pipe(input_com) == -1)
+    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1)
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -355,6 +383,7 @@ int main(int argc, char *argv[])
             while (true)
             {
                 close(input_com[1]);
+
                 int size;
 
                 if (read(input_com[0], &size, sizeof(int)) < 0)
@@ -363,23 +392,33 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                if (read(input_com[0], input_string, sizeof(char) * size) < 0)
+                if (size == POP || size == EMPTY)
                 {
-                    print_error("Something went wrong while reading from pipe.\n");
-                    _exit(READ_ERROR);
+                    print_log("Queue operation requested.\n");
                 }
-
-                Input current_job = create_input(input_string, argv[2]);
-                
-                if (current_job.valid == 1)
+                else
                 {
-                    push(pqueue, current_job);
-                    printf("size push: %d\n", pqueue->size);
-                    print_info("Added a new job to the queue\n");
-                    if (write(server_to_client, &(current_job.status), sizeof(int)) < 0)
+                    if (read(input_com[0], input_string, sizeof(char) * size) < 0)
                     {
-                        print_error("Failed to write to FIFO <stc in server.c>\n");
-                        _exit(WRITE_ERROR);
+                        print_error("Something went wrong while reading from pipe.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    PreProcessedInput current_job = create_ppinput(input_string);
+                    
+                    if (current_job.valid == 1)
+                    {
+                        push(pqueue, current_job);
+                        print_info("Added a new job to the queue\n");
+
+                        /* printf("%s\n", current_job.desc); */
+                        
+                        /* Update do status para o cliente */
+                        if (write(server_to_client, &(current_job.status), sizeof(int)) < 0)
+                        {
+                            print_error("Failed to write to FIFO <stc in server.c>\n");
+                            _exit(WRITE_ERROR);
+                        }
                     }
                 }
 
@@ -398,9 +437,21 @@ int main(int argc, char *argv[])
             according to the in_use_operations array.
             */
 
-            printf("size: %d\n", pqueue->size);
+            // close(input_com[0]);
+            // print_log("wtf ?!\n");
+            // int x = POP;
+            // if (write(input_com[1], &x, sizeof(int)) < 0)
+            // {
+            //     print_error("xd\n");
+            //     exit(EXIT_FAILURE);
+            // }
+            // close(input_com[1]);
+
+            /*
             while (true)
             {
+                printf("size: %d\n", pqueue->size);
+                sleep(10);
                 if (!is_empty(pqueue))
                 {
                     print_log("Entrei !is_empty(pqueue).\n");
@@ -423,6 +474,7 @@ int main(int argc, char *argv[])
                     }
                 }
             }
+            */
         }
 
         wait(NULL); // Espera pelo processo 'child process (dispacher)'.
