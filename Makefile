@@ -59,11 +59,11 @@ clean:
 	-rm -rf obj/* $(NAME_C)
 	-rm client
 	-rm saida/*
-	-rm com/*
+	-rm tmp/*
 
 .PHONY: cleans
 cleans:
 	-rm -rf obj/* $(NAME_S)
 	-rm server
 	-rm saida/*
-	-rm com/*
+	-rm tmp/*

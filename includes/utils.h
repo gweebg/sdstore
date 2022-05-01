@@ -13,6 +13,7 @@
 #define UNKNOWN_MESSAGE_ERROR 11
 
 #define QSIZE        1024
+#define LUCKY_NUMBER 22
 
 #include <stdlib.h>
 
