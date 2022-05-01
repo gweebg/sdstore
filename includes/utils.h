@@ -50,3 +50,5 @@ void print_error(char *content);
 void print_info(char *content);
 
 void print_log(char *content);
+
+void send_help_message(int server_to_client);

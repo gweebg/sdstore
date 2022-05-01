@@ -125,6 +125,44 @@ Configuration generate_config(char *path)
 }
 
 /**
+ * @brief Function that sends to the client the usage menu of the programm.
+ * 
+ * @param server_to_client Named pipe where to write.
+ */
+void send_help_message(int server_to_client)
+{
+    char *help_menu = "usage: ./client [mode] priority input_file output_file [operations]\n"
+                      "Submit jobs to be executed.\n"
+                      "Options and arguments:\n"
+                      "Modes:\n"
+                      "proc-file   : submit a job to the server, requires [0<=priority<=5], [input_file], [output_file] and [operations]\n"
+                      "status      : display a status message containing the status of the server (./client status)\n"
+                      "help        : display this message (./client help)\n"
+                      "Operations:\n"
+                      "nop         : just a nop, does nothing\n"
+                      "gcompress   : compresses the file with the format gzip\n"
+                      "gdecompress : decompresses the file which format is gzip\n"
+                      "bcompress   : compresses the file with the format bzip\n"
+                      "bdecompress : decompresses the file which format is bzip\n"
+                      "encrypt     : encrypts the file (ccrypt)\n"
+                      "decrypt     : decrypts the file (ccrypt)\n"
+                      "Do not forget to start the server application before running a request. Otherwise you will get a deadlock.\n";
+
+    int message = 4;
+    if (write(server_to_client, &message, sizeof(int)) < 0)
+    {
+        print_error("Could not write into FIFO. <stc> in server.c\n");
+        _exit(WRITE_ERROR);
+    }
+
+    if (write(server_to_client, help_menu, strlen(help_menu)) < 0)
+    {
+        print_error("Could not write into FIFO. <stc> in server.c\n");
+        _exit(WRITE_ERROR);
+    }
+}
+
+/**
  * @brief Helper function to print out error messages using the 'write' function.
  * 
  * @param content String to print.

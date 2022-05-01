@@ -120,16 +120,34 @@ bool check_resources(Input job, Configuration config)
  */
 PreProcessedInput create_ppinput(char *string)
 {
-    PreProcessedInput p;
-    p.valid = 1;
-    p.id = job_number;
-    p.desc = strdup(string);
-    p.status = PENDING;
+    PreProcessedInput p = {.valid = 1, 
+                           .id = job_number, 
+                           .desc = strdup(string), 
+                           .status = PENDING};
     
-    char *priority = strtok(string, " ");
-    priority = strtok(NULL, " ");
+    char *token = strtok(string, " ");
+    p.fifo = strdup(token);
 
-    p.priority = atoi(priority);
+    token = strtok(NULL, " ");
+    if (strcmp(token, "help") == 0)
+    {
+        p.status = HELP;
+        return p;
+    }
+    else if (strcmp(token, "status") == 0)
+    {
+        p.status = STATUS;
+        return p;
+    }
+
+    token = strtok(NULL, " ");
+    if (strcmp(token, "-p") == 0)
+    {
+        token = strtok(NULL, " ");
+        p.priority = atoi(token);
+    }
+    else p.priority = 0;
+
     if (p.priority < 0 || p.priority > 5)
     {
         print_error("Invalid priority value.\n");
@@ -215,15 +233,10 @@ int main(int argc, char *argv[])
         return FORMAT_ERROR;
     }
 
-    /* cts <=> client_to_server */
+    /* Opening communication with the client (client to server). */
     int client_to_server;
-    const char *cts_fifo = "com/cts";
+    const char *cts_fifo = "tmp/cts";
     mkfifo(cts_fifo, 0666);
-
-    /* stc <=> server_to_client */
-    int server_to_client;
-    const char *stc_fifo = "com/stc";
-    mkfifo(stc_fifo, 0666);
 
     print_log("Server is online!\n");
     print_log("Listening for data... \n");
@@ -235,22 +248,14 @@ int main(int argc, char *argv[])
         _exit(OPEN_ERROR);
     }
 
-    server_to_client = open(stc_fifo, O_WRONLY);
-    if (server_to_client < 0) 
-    {
-        print_error("Failed to open FIFO <sct in server.c>\n");
-        _exit(OPEN_ERROR);
-    }
-
     Configuration config = generate_config(argv[1]);
 
-    PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + 
-                                    sizeof(PreProcessedInput) * QSIZE);
+    PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
     init_queue(pqueue);
 
-    int input_com[2], dispacher_com[2];
+    int input_com[2], dispacher_com[2], handler_com[2];
 
-    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1)
+    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(handler_com) == -1)
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -289,49 +294,14 @@ int main(int argc, char *argv[])
                 print_error("Could not read from FIFO.\n");
                 _exit(READ_ERROR);
             }
-            else if (strncmp(arguments, "help", 4) == 0)
-            {
-                char *help_menu = "usage: ./client [mode] priority input_file output_file [operations]\n"
-                                  "Submit jobs to be executed.\n"
-                                  "Options and arguments:\n"
-                                  "Modes:\n"
-                                  "proc-file   : submit a job to the server, requires [0<=priority<=5], [input_file], [output_file] and [operations]\n"
-                                  "status      : display a status message containing the status of the server (./client status)\n"
-                                  "help        : display this message (./client help)\n"
-                                  "Operations:\n"
-                                  "nop         : just a nop, does nothing\n"
-                                  "gcompress   : compresses the file with the format gzip\n"
-                                  "gdecompress : decompresses the file which format is gzip\n"
-                                  "bcompress   : compresses the file with the format bzip\n"
-                                  "bdecompress : decompresses the file which format is bzip\n"
-                                  "encrypt     : encrypts the file (ccrypt)\n"
-                                  "decrypt     : decrypts the file (ccrypt)\n"
-                                  "Do not forget to start the server application before running a request. Otherwise you will get a deadlock.\n";
-
-                int message = 4;
-                if (write(server_to_client, &message, sizeof(int)) < 0)
-                {
-                    print_error("Could not write into FIFO. <stc> in server.c\n");
-                    _exit(WRITE_ERROR);
-                }
-
-                if (write(server_to_client, help_menu, strlen(help_menu)) < 0)
-                {
-                    print_error("Could not write into FIFO. <stc> in server.c\n");
-                    _exit(WRITE_ERROR);
-                }
-            }
-            else if (strncmp(arguments, "status", 6) == 0)
-            {
-                // char *status_string = generate_status(config);
-                print_log("Status requested.\n");
-            }
-            else if (strcmp(arguments, "") != 0) 
+            
+            if (strcmp(arguments, "") != 0) 
             {
                 /* 
                 Se a string recebida não for vazia, então enviamos a string através de um pipe
                 para outro processo para o seu parsing e futuro armazenamento na queue.
-                */                
+                */               
+
                 int input_length = strlen(arguments) + 1; 
 
                 if (write(input_com[1], &input_length, sizeof(int)) < 0)
@@ -374,10 +344,12 @@ int main(int argc, char *argv[])
         if (pid_dispacher == 0)
         {
             /*
-            !Child Process (Dispacher)
+            !Child Process (Handler)
             Takes a string sent from the pipe (main), parses it and inserts the, newly originated,
             Input struct into the priority queue.
             */
+
+            close(dispacher_com[0]);
 
             char input_string[BUFSIZ];
             while (true)
@@ -392,93 +364,140 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                if (size == POP || size == EMPTY)
+                if (read(input_com[0], input_string, sizeof(char) * size) < 0)
                 {
-                    print_log("Queue operation requested.\n");
+                    print_error("Something went wrong while reading from pipe.\n");
+                    _exit(READ_ERROR);
                 }
-                else
+
+                PreProcessedInput current_job = create_ppinput(input_string);
+                
+                if (current_job.valid == 1)
                 {
-                    if (read(input_com[0], input_string, sizeof(char) * size) < 0)
+                    int server_to_client = open(current_job.fifo, O_WRONLY);
+                    if (server_to_client < 0)
                     {
-                        print_error("Something went wrong while reading from pipe.\n");
-                        _exit(READ_ERROR);
+                        print_error("Could not open server to client fifo.\n");
+                        _exit(OPEN_ERROR);
                     }
 
-                    PreProcessedInput current_job = create_ppinput(input_string);
-                    
-                    if (current_job.valid == 1)
+                    switch(current_job.status)
                     {
-                        push(pqueue, current_job);
-                        print_info("Added a new job to the queue\n");
+                        case HELP:
+                            print_info("Help on the way!\n");
+                            send_help_message(server_to_client);
+                            break;
 
-                        /* printf("%s\n", current_job.desc); */
-                        
-                        /* Update do status para o cliente */
-                        if (write(server_to_client, &(current_job.status), sizeof(int)) < 0)
-                        {
-                            print_error("Failed to write to FIFO <stc in server.c>\n");
-                            _exit(WRITE_ERROR);
-                        }
+                        case STATUS:
+                            print_info("Checking on me huh...\n");
+                            // send_status_message(server_to_client);
+                            break;
+
+                        default:
+                            
+                            if (write(dispacher_com[1], &current_job, sizeof(PreProcessedInput)) < 0)
+                            {
+                                print_error("Failed to write to dispacher_com (default:).\n");
+                                _exit(WRITE_ERROR);
+                            }
+                            
+                            /* Update do status para o cliente */
+
+                            char pending_message[] = "[*] Pending...\n";
+                            if (write(server_to_client, pending_message, strlen(pending_message)) < 0)
+                            {
+                                print_error("Failed to write to FIFO <stc in server.c>\n");
+                                _exit(WRITE_ERROR);
+                            }      
                     }
+
+                    close(server_to_client);
                 }
 
                 /* Reset buffer */
                 memset(input_string, 0, BUFSIZ);
             }
 
+            close(dispacher_com[1]);
             close(input_com[0]);
             _exit(EXIT_SUCCESS);
         }
         else
         {
             /*
-            !Parent Process (Dispacher)
+            !Parent Process (Manager/Executer)
             On an infinite loop this process pops the elements from the queue and tries to execute it, 
             according to the in_use_operations array.
             */
 
-            // close(input_com[0]);
-            // print_log("wtf ?!\n");
-            // int x = POP;
-            // if (write(input_com[1], &x, sizeof(int)) < 0)
-            // {
-            //     print_error("xd\n");
-            //     exit(EXIT_FAILURE);
-            // }
-            // close(input_com[1]);
-
-            /*
-            while (true)
+            pid_t queue_manager = fork();
+            if (queue_manager < 0)
             {
-                printf("size: %d\n", pqueue->size);
-                sleep(10);
-                if (!is_empty(pqueue))
+                print_error("Could not fork process (queue_manager).\n");
+                _exit(FORK_ERROR);
+            }
+
+            if (queue_manager == 0) //! MANAGER
+            {
+                /* Process responsible for managing the queue (push, pop, is_empty, ...) */
+                close(dispacher_com[1]);
+                // close(handler_com[0]);
+
+                int bytes_read; char string[BUFSIZ];
+                while(true)
                 {
-                    print_log("Entrei !is_empty(pqueue).\n");
-                    Input job = pop(pqueue);
-                    print_log(job.desc);
-                    int executed = false;
-
-                    while (!executed)
-                    {
-                        print_log("Entrei !executed loop.\n");
-                        if (check_resources(job, config)) 
+                    while((bytes_read = read(dispacher_com[0], string, BUFSIZ)) > 0) 
+                    {  
+                        if (strncmp(string, "pop", 3) == 0)
                         {
-                            print_log("Entrei check_resources.\n");
-                            // update_val();
-                            execute(job);
-                            // update_val();
+                            if (is_empty(pqueue) == false)
+                            {
+                                PreProcessedInput poped_job = pop(pqueue);
 
-                            executed = false;
+                                /* Send through handler_com pipe the poped_job. */
+                                if (write(dispacher_com[1], &poped_job, sizeof(PreProcessedInput)) < 0)
+                                {
+                                    print_error("Could not write to handler_com pipe.\n");
+                                    _exit(WRITE_ERROR);
+                                }
+                            }
+                        }
+                        else /* If didn't read 'pop' then it's a push command. */
+                        {
+                            if (pqueue->size != QSIZE)
+                            {
+                                PreProcessedInput received_job;
+
+                                print_info("tenta ler...\n");
+                                /* Ler o job do pipe */
+                                if (read(dispacher_com[0], &received_job, sizeof(PreProcessedInput)) < 0)
+                                {
+                                    print_error("Could not read from dispacher_com pipe.\n");
+                                    _exit(READ_ERROR);
+                                }
+
+                                print_info("leu\n");
+
+                                if (received_job.valid == 1) push(pqueue, received_job);
+
+                                char info_message[256];
+                                sprintf(info_message, "Added new job (id:%s) to the queue.\n", received_job.fifo);
+                                print_info(info_message);
+                            }
                         }
                     }
                 }
+
+                close(dispacher_com[0]);
+                // close(handler_com[1]);
             }
-            */
+            else //! EXECUTER
+            {
+                /* Process responsible for dequeing and executing jobs. */
+            }
         }
 
         wait(NULL); // Espera pelo processo 'child process (dispacher)'.
-        close(server_to_client);
     }
 
     wait(NULL); // Espera pelo processo 'child process (main)'.

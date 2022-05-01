@@ -15,7 +15,9 @@ typedef enum
     PENDING,
     QUEUED,
     EXECUTING,
-    COMPLETED
+    COMPLETED,
+    HELP,
+    STATUS
 
 } Status;
 
@@ -29,6 +31,7 @@ typedef enum
 typedef struct ppinput
 {
     char *desc;
+    char *fifo;
     
     int priority, 
         id, 
@@ -57,6 +60,7 @@ typedef struct input
     char *from;
     char *to;
     char *desc;
+    char *fifo;
 
     Status status;
 

@@ -3,7 +3,7 @@
  * @author gweebg ; johnny_longo 
  * @brief Client side of the application. 
  * @version 0.1
- * @date 2022-04-12
+ * @date 2022-04-29
  * 
  * @copyright Copyright (c) 2022
  * 
@@ -21,17 +21,6 @@
 #include "../includes/client.h"
 #include "../includes/utils.h"
 
-#define DEBUG
-
-/**
- * @brief Function that halts the execution because of an write error.
- */
-void raise_write_error()
-{
-    write(STDERR_FILENO, "[!] Could not write to FIFO.\n", 30);
-    exit(WRITE_ERROR);
-}
-
 /**
  * @brief Funtion that executes the whole client side as a programm.
  * 
@@ -43,114 +32,79 @@ int main(int argc, char *argv[])
 {
     /*
     Exemplo de input:
-    ./sdstore proc-file <priority> samples/file-a outputs/file-a-output bcompress nop gcompress encrypt nop
-    Menos de 6 argumentos raise erro.
-    Also, o enunciado diz para assumir que o input é sempre válido.
+    ./sdstore proc-file -p <priority> samples/file-a outputs/file-a-output bcompress nop gcompress encrypt nop
     */
 
-    if (argc < 6 )
+    /* Abrir comunicacao com o servidor. */ 
+    int client_to_server = open("tmp/cts", O_WRONLY);
+    if (client_to_server < 0)
     {
-        if (!(argc == 2 && ((strcmp(argv[1], "status") == 0) || (strcmp(argv[1], "help") == 0))))
-        {
-            print_error("Not enought arguments. Expected at least 6 but got less, refer to the documentation for more information.\n");
-            return FORMAT_ERROR;
-        }
-    }
-
-    char *arguments = xmalloc(sizeof(char) * 32 * (argc - 1));
-
-    /* Meter todos os argumentos numa string para poder enviar mais facilmente para o servidor. */
-    for (int i = 1; i < argc; i++)
-    {
-        char *temp = xmalloc(sizeof(char) * 32);        
-        sprintf(temp, "%s ", argv[i]);
-
-        strncat(arguments, temp, strlen(argv[i]) + 1);
-        free(temp);
-    }
-
-    /* O fifo de escrita já está aberto pelo servidor, só precisamos de escrever. */
-
-    int client_to_server;
-    const char *cts_fifo = "com/cts";
-    client_to_server = open(cts_fifo, O_WRONLY);
-
-    int server_to_client;
-    const char *stc_fifo = "com/stc";
-    server_to_client = open(stc_fifo, O_RDONLY);
-
-    if (client_to_server < 0 || server_to_client < 0)
-    {
-        print_error("Could not open at least one FIFO file (cts|stc).\n");
+        print_error("Failed to open client to server pipe (client).\n");
         return OPEN_ERROR;
     }
 
-    /* Enviar a string que contem os argumentos (str) */
-    int args_len = strlen(arguments) + 1;
+    /* Criacao do pipe entre servidor e cliente. */
+    pid_t client_id = getpid();
 
-    // if (write(client_to_server, &args_len, sizeof(int)) < 0) raise_write_error();  /* Primeiro enviar o tamanho da string */
-    if (write(client_to_server, arguments, args_len) < 0) raise_write_error(); /* E depois a string */
-    
-    free(arguments);
+    char cts_fifo[64];
+    sprintf(cts_fifo, "tmp/stc_%d", client_id);
 
-    /* Acaba a comunicação por isso fechamos os FIFOS do lado do client. */
-    close(client_to_server);
+    char info[32];
+    sprintf(info, "Job id: %d\n", client_id);
+    print_info(info);
 
-    int message;
-    while(true)
+    /* Enviar sinal de "status" ou "help" ao servidor. */
+    if ((argc >= 6) || (strcmp(argv[1], "status") == 0) || (strcmp(argv[1], "help") == 0)) /* Enviar os argumentos todos numa string para o servidor. */
     {
-        if (read(server_to_client, &message, sizeof(int)) < 0) 
+        mkfifo(cts_fifo, 0666);
+
+        char *message = xmalloc(sizeof(char) * (argc) * 16);
+        strcpy(message, cts_fifo);
+
+        for (int i = 1; i < argc; i++)
         {
-            print_error("Could not read from FIFO. <stc in client.c>\n");
-            return READ_ERROR;
+            char *temp = xmalloc(sizeof(char) * 16);        
+            sprintf(temp, " %s", argv[i]);
+
+            strncat(message, temp, strlen(argv[i]) + 1);
+            free(temp);
         }
-        
-        switch (message)
+
+        if (write(client_to_server, message, strlen(message)) < 0)
         {
-            case 0:
-                print_info("Pending...\n");
-                break;
-
-            case 1:
-                print_info("Queued up...\n");
-                break;
-
-            case 2: 
-                print_info("Executing...\n");
-                break;
-
-            case 3:
-                print_info("Finished!\n");
-                break;
-
-            case 4: // Help
-                char help_menu[BUFSIZ];
-                if (read(server_to_client, help_menu, BUFSIZ) < 0)
-                {
-                    print_error("Could not read from FIFO. <stc> in client.c");
-                    return READ_ERROR;
-                }
-
-                if (write(STDOUT_FILENO, help_menu, strlen(help_menu)) < 0)
-                {
-                    print_error("Could not write to STDOUT_FILENO.");
-                    return WRITE_ERROR; 
-                }
-
-                return EXIT_SUCCESS;
-
-            case 5: // Status
-                break;
-
-            default:
-                print_error("Unknown message code.\n");
-                return UNKNOWN_MESSAGE_ERROR;
-        }                
+            print_error("Failed to write to client to server pipe.\n");
+            return WRITE_ERROR;
+        }
+    }
+    else /* Erro se houver menos de 6 argumentos ou argumentos invalidos. */
+    {
+        print_error("Not enought arguments. Expected at least 6 but got less, refer to the documentation for more information.\n");
+        return FORMAT_ERROR;
     }
 
-    /* Closes communication between server --> client */
-    close(server_to_client);
+    close(client_to_server);
 
+    int server_to_client = open(cts_fifo, O_RDONLY);
+    if (server_to_client < 0)
+    {
+        print_error("Failed to open server to client pipe. (client).\n");
+        return OPEN_ERROR;
+    }
+
+    int bytes_read; char string[BUFSIZ];
+
+    /* Listen to incoming messages from the server. */
+    while(true)
+    {
+        while((bytes_read = read(server_to_client, string, BUFSIZ)) > 0) 
+        {   
+            write(STDOUT_FILENO, string, bytes_read);
+
+            /* 848 is the size of the help message. */
+            if (bytes_read >= 848) return EXIT_SUCCESS;
+        }
+    }
+
+    close(server_to_client);
     return 0;
 }
-
