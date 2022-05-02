@@ -413,16 +413,30 @@ int main(int argc, char *argv[])
                 {
                     print_log("Status request received (queue_manager).\n");
 
-                    char *status = "vazia\n";
+                    char *status = is_empty(pqueue) ? "true" : "false";
                     if (write(dispacher_com[1], status, strlen(status)) < 0)
                     {
-                        print_error("Could not write to server toclient fifo.\n");
+                        print_error("Could not write to server to client fifo.\n");
                         _exit(WRITE_ERROR);
                     }
                 }
                 else if (size == POP) /* Pop an element from the queue. */
                 {
                     print_log("Pop request received (queue_manager).\n");
+                    PreProcessedInput job_to_send = pop(pqueue);
+
+                    int message_length = strlen(job_to_send.desc);
+                    if (write(dispacher_com[1], &message_length, sizeof(int)) < 0)
+                    {
+                        print_error("Could not write to server to client fifo.\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    if (write(dispacher_com[1], job_to_send.desc, message_length) < 0)
+                    {
+                        print_error("Could not write to server to client fifo.\n");
+                        _exit(WRITE_ERROR);
+                    }
                 }
                 else /* Push an element to the queue. */
                 {
@@ -432,38 +446,6 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
-                    // if (strncmp(input_string, "pop", 3) == 0)
-                    // {
-                    //     PreProcessedInput job = pop(pqueue);
-
-                    //     if (job.valid == 1)
-                    //     {
-                    //         if (write(dispacher_com[1], job.desc, strlen(job.desc)) < 0)
-                    //         {
-                    //             print_error("Could not write to server toclient fifo.\n");
-                    //             _exit(WRITE_ERROR);
-                    //         }
-                    //     }
-
-                    //     /* Escrever para o pipe do executer. */
-                    //     print_log("Pop requested.\n");
-                    // }
-                    // else if (strncmp(input_string, "status", 6) == 0)
-                    // {   
-                    //     print_info("Queue status requested.\n");
-                    //     int statuss = is_empty(pqueue) ? LUCKY_NUMBER : -LUCKY_NUMBER;
-
-                    //     char *status = "vazia";
-                    //     if (write(dispacher_com[1], status, strlen(status)) < 0)
-                    //     {
-                    //         print_error("Could not write to server toclient fifo.\n");
-                    //         _exit(WRITE_ERROR);
-                    //     }
-
-                    //     /* Escrever para o pipe do executer. */
-                    //     print_log("Queue status requested.\n");
-                    // }
-                    
                     print_log("Push requested received (queue_manager).\n");
                     PreProcessedInput job = create_ppinput(input_string);
                     if (job.valid) push(pqueue, job);
@@ -521,11 +503,32 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                printf("status: %s\n", status);
-                // if (status == LUCKY_NUMBER)
-                // {
-                //     print_info("não está empty.\n");
-                // }
+                if (strncmp(status, "false", 4) == 0)
+                {
+                    int pop_message = POP;
+                    if (write(input_com[1], &pop_message, sizeof(int)) < 0)
+                    {
+                        print_error("Could not write to input_com.\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    int message_length;
+                    if (read(dispacher_com[0], &message_length, sizeof(int)) < 0)
+                    {
+                        print_error("Could not read from dispacher_com.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    char message[message_length];
+                    if (read(dispacher_com[0], message, message_length) < 0)
+                    {
+                        print_error("Could not read from dispacher_com.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    printf("%s\n", message);
+                }
+
                 sleep(1);
             }
 
