@@ -403,55 +403,70 @@ int main(int argc, char *argv[])
             {
                 int size;
 
-                /*! MUDAR ISTO PORQUE PODE DAR DATA TANGLING*/
                 if (read(input_com[0], &size, sizeof(int)) < 0)
                 {
                     print_error("Something went wrong while reading from pipe.\n");
                     _exit(READ_ERROR);
                 }
 
-                if (read(input_com[0], input_string, sizeof(char) * size) < 0)
+                if (size == EMPTY) /* Get status of the queue. */
                 {
-                    print_error("Something went wrong while reading from pipe.\n");
-                    _exit(READ_ERROR);
-                }
+                    print_log("Status request received (queue_manager).\n");
 
-                if (strncmp(input_string, "pop", 3) == 0)
-                {
-                    PreProcessedInput job = pop(pqueue);
-
-                    if (job.valid == 1)
-                    {
-                        if (write(dispacher_com[1], job.desc, strlen(job.desc)) < 0)
-                        {
-                            print_error("Could not write to server toclient fifo.\n");
-                            _exit(WRITE_ERROR);
-                        }
-                    }
-
-                    /* Escrever para o pipe do executer. */
-                    print_log("Pop requested.\n");
-                }
-                else if (strncmp(input_string, "status", 6) == 0)
-                {   
-                    print_info("Queue status requested.\n");
-                    int statuss = is_empty(pqueue) ? LUCKY_NUMBER : -LUCKY_NUMBER;
-
-                    char *status = "vazia";
+                    char *status = "vazia\n";
                     if (write(dispacher_com[1], status, strlen(status)) < 0)
                     {
                         print_error("Could not write to server toclient fifo.\n");
                         _exit(WRITE_ERROR);
                     }
-
-                    /* Escrever para o pipe do executer. */
-                    print_log("Queue status requested.\n");
                 }
-                else
+                else if (size == POP) /* Pop an element from the queue. */
                 {
+                    print_log("Pop request received (queue_manager).\n");
+                }
+                else /* Push an element to the queue. */
+                {
+                    if (read(input_com[0], input_string, sizeof(char) * size) < 0)
+                    {
+                        print_error("Something went wrong while reading from pipe.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    // if (strncmp(input_string, "pop", 3) == 0)
+                    // {
+                    //     PreProcessedInput job = pop(pqueue);
+
+                    //     if (job.valid == 1)
+                    //     {
+                    //         if (write(dispacher_com[1], job.desc, strlen(job.desc)) < 0)
+                    //         {
+                    //             print_error("Could not write to server toclient fifo.\n");
+                    //             _exit(WRITE_ERROR);
+                    //         }
+                    //     }
+
+                    //     /* Escrever para o pipe do executer. */
+                    //     print_log("Pop requested.\n");
+                    // }
+                    // else if (strncmp(input_string, "status", 6) == 0)
+                    // {   
+                    //     print_info("Queue status requested.\n");
+                    //     int statuss = is_empty(pqueue) ? LUCKY_NUMBER : -LUCKY_NUMBER;
+
+                    //     char *status = "vazia";
+                    //     if (write(dispacher_com[1], status, strlen(status)) < 0)
+                    //     {
+                    //         print_error("Could not write to server toclient fifo.\n");
+                    //         _exit(WRITE_ERROR);
+                    //     }
+
+                    //     /* Escrever para o pipe do executer. */
+                    //     print_log("Queue status requested.\n");
+                    // }
+                    
+                    print_log("Push requested received (queue_manager).\n");
                     PreProcessedInput job = create_ppinput(input_string);
                     if (job.valid) push(pqueue, job);
-                    print_log("Push requested.\n");
 
                     int server_to_client = open(job.fifo, O_WRONLY);
                     if (server_to_client < 0)
@@ -466,6 +481,8 @@ int main(int argc, char *argv[])
                         print_error("Could not write to server toclient fifo.\n");
                         _exit(WRITE_ERROR);
                     }
+
+                    close(server_to_client);
                 }
 
                 /* Reset buffer */
@@ -488,14 +505,14 @@ int main(int argc, char *argv[])
                 /* 2º mandar para input_com[0] 'pop' e guardar elemento */
                 /* 3º executar job */
 
-                char *status_message = "status";
-                if (write(input_com[1], status_message, strlen(status_message)) < 0)
+                int status_message = EMPTY;
+                if (write(input_com[1], &status_message, sizeof(int)) < 0)
                 {
                     print_error("Could not write to input_com.\n");
                     _exit(WRITE_ERROR);
                 }
 
-                print_log("status sent");
+                print_log("Status request sent (executer).\n");
 
                 char status[BUFSIZ];
                 if (read(dispacher_com[0], status, BUFSIZ) < 0)
@@ -509,7 +526,7 @@ int main(int argc, char *argv[])
                 // {
                 //     print_info("não está empty.\n");
                 // }
-
+                sleep(1);
             }
 
             close(dispacher_com[0]);

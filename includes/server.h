@@ -1,7 +1,7 @@
 #pragma once
 
-#define POP -1
-#define EMPTY -2
+#define POP -22
+#define EMPTY -30
 
 /**
  * @brief Status enum that describes the progress of a job.
