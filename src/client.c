@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
 
             /* 848 is the size of the help message. */
             if (bytes_read >= 848) return EXIT_SUCCESS;
+
         }
     }
 

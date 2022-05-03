@@ -44,18 +44,21 @@ void *xmalloc(size_t size)
  * @param string Input string.
  * @return Number of operations (int).
  */
-int get_commands_len(char *string)
+int total_operations(char *string)
 {
+    /* stc_19284 proc-file -p 5 tests/in1.txt tests/out1.txt nop bcompress encrypt */   
     char *tok = strtok(string, " ");
 
-    int i = 0;
+    int i = 0, expecting = 4;
     while(tok != NULL) 
     {
+        if (strcmp(tok, "-p") == 0) expecting = 6;
+
         i++;
         tok = strtok(NULL, " \n");
     }
 
-    return i - 4;
+    return i - expecting;
 }
 
 /**

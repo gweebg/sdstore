@@ -52,7 +52,7 @@ $(BIN_DIR)/$(NAME_S): $(OBJ_S)
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -I$(INC_DIR) -MMD -c $< -o $@
-	mkdir -p com
+	mkdir -p tmp
 
 .PHONY: clean
 clean:

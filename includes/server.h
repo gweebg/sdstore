@@ -53,19 +53,16 @@ typedef struct ppinput
  * @param valid Boolean value that represents whether a job is valid or not.
  * @param op_len Number of operations of the job.
  */
-typedef struct input 
+typedef struct job 
 {
     char **operations;
 
-    char *from;
-    char *to;
-    char *desc;
-    char *fifo;
+    char *from,
+         *to,
+         *fifo,
+         *desc;
 
     Status status;
 
-    int id;
-    int priority;
     int op_len;
-    int valid;
-} Input;
+} Job;

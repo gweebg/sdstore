@@ -13,10 +13,8 @@
 #define PIPE_ERROR   8
 #define DUP2_ERROR   9
 #define EXEC_ERROR   10
-#define UNKNOWN_MESSAGE_ERROR 11
 
 #define QSIZE        1024
-#define LUCKY_NUMBER 22
 
 /**
  * @brief Struct that stores the number of times an operation can run at the same time.
@@ -43,7 +41,7 @@ typedef struct config
 
 Configuration generate_config(char *path);
 
-int get_commands_len(char *string);
+int total_operations(char *string);
 
 void *xmalloc(size_t size);
 

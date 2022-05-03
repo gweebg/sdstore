@@ -25,9 +25,10 @@
 #include "../includes/execute.h"
 
 /* Global Variables */
-int in_use_operations[7] = {0};         /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
+/* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
+int in_use_operations[7] = {0};         
 
-Input in_execution_jobs[1024];
+Job in_execution_jobs[1024];
 PreProcessedInput queued_jobs[1024];
 
 int active_jobs = 0, 
@@ -43,7 +44,7 @@ int active_jobs = 0,
 /*
 char *generate_status(Configuration config)
 {
-    char *operation_status = xmalloc(sizeof(char) * 512);
+    char *operation_status = malloc(sizeof(char) * 512);
     sprintf(operation_status, "resources status (now/max):\n" 
                               "operation nop: %d/%d\n"
                               "operation gcompress: %d/%d\n"
@@ -60,13 +61,13 @@ char *generate_status(Configuration config)
                               in_use_operations[5], config.encrypt,
                               in_use_operations[6], config.decrypt);
 
-    char *job_status = xmalloc(sizeof(char) * 512);
+    char *job_status = malloc(sizeof(char) * 512);
     strncpy(job_status, "job status (job_id (status_code): job):\n", 27);   
 
     if (active_jobs != 0)
         for (int i = 0; i < active_jobs; i++)
         {
-            char *temp = xmalloc(sizeof(char) * 32);        
+            char *temp = malloc(sizeof(char) * 32);        
             sprintf(temp, "job #%d (%d): %s\n", in_execution_jobs[i].id,
                                                 in_execution_jobs[i].status,
                                                 in_execution_jobs[i].desc);
@@ -88,7 +89,7 @@ char *generate_status(Configuration config)
  * @param config Configuration object with the limit values.
  * @return true, if there are enough resources, false otherwise.
  */
-bool check_resources(Input job, Configuration config)
+bool check_resources(Job job, Configuration config)
 {
     Configuration num_operations_per_type = {0}; /* Set all values to 0. */
 
@@ -179,53 +180,52 @@ PreProcessedInput create_ppinput(char *string)
 }
 
 /**
- * @brief Populates an Input struct when given a valid string.
+ * @brief Populates an Job struct when given a valid string.
  * 
- * @param string Input string to be 'converted' to a Input struct.
+ * @param base Input string to be 'converted' to a Job struct.
  * @param exec_path Path where the custom (or not) executables are.
  */
-Input create_input(PreProcessedInput base, char *exec_path)
+Job create_job(char *base, char *exec_path)
 {
-    Input r;
+    /* stc_19284 proc-file -p 5 tests/in1.txt tests/out1.txt nop bcompress encrypt */
+    Job job = {.desc = strdup(base),
+               .op_len = total_operations(strdup(base))};
 
-    r.id = base.id;
-    r.status = EXECUTING;
-    r.valid = base.valid;
-    r.desc = strdup(base.desc);
+    char *token = strtok(base, " "); /* fifo */
+    job.fifo = strdup(token);
 
-    r.op_len = get_commands_len(strdup(base.desc));
+    token = strtok(NULL, " "); /* job type */
+    token = strtok(NULL, " "); /* -p ? */
 
-    char *argument = strtok(base.desc, " ");
-
-    /* Setting priority */
-    argument = strtok(NULL, " ");
-    r.priority = base.priority;
-
-    /* Setting input path */
-    argument = strtok(NULL, " ");
-    r.from = strdup(argument);
-
-    /* Setting output path */
-    argument = strtok(NULL, " ");
-    r.to = strdup(argument);
-
-    /* Setting operations */
-    r.operations = xmalloc(sizeof(char) * r.op_len * 16); 
-    
-    int i = 0;
-    argument = strtok(NULL, " ");
-    while(argument != NULL) 
+    if (strcmp(token, "-p") == 0) 
     {
-        char *temp = xmalloc(sizeof(char) * (strlen(exec_path) + strlen(argument) + 1));
-        sprintf(temp, "%s/%s", exec_path, argument);
+        token = strtok(NULL, " ");
+        token = strtok(NULL, " "); 
+        
+        job.from = strdup(token);
+    }
+    else job.from = strdup(token);
 
-        r.operations[i++] = strdup(temp);
+
+    token = strtok(NULL, " "); 
+    job.to = strdup(token);
+
+    job.operations = malloc(sizeof(char) * job.op_len * 16); 
+    int i = 0;
+
+    token = strtok(NULL, " ");
+    while(token) 
+    {
+        char *temp = malloc(sizeof(char) * (strlen(exec_path) + strlen(token) + 1));
+        sprintf(temp, "%s/%s", exec_path, token);
+
+        job.operations[i++] = strdup(temp);
 
         free(temp);
-        argument = strtok(NULL, " \n");
+        token = strtok(NULL, " \n");
     }
 
-    return r;
+    return job;
 }
 
 /**
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
 
     Configuration config = generate_config(argv[1]);
 
-    PriorityQueue *pqueue = xmalloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
+    PriorityQueue *pqueue = malloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
     init_queue(pqueue);
 
     int input_com[2], dispacher_com[2], handler_com[2];
@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
                 para outro processo para o seu parsing e futuro armazenamento na queue.
                 */
 
-                char *stc_fifo = xmalloc(sizeof(char) * 64);
+                char *stc_fifo = malloc(sizeof(char) * 64);
                 int message_status = get_status(strdup(arguments), stc_fifo);
 
                 int server_to_client = open(stc_fifo, O_WRONLY);
@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
 
                 if (size == EMPTY) /* Get status of the queue. */
                 {
-                    print_log("Status request received (queue_manager).\n", log_file, false);
+                    // print_log("Status request received (queue_manager).\n", log_file, false);
 
                     char *status = is_empty(pqueue) ? "true" : "false";
                     if (write(dispacher_com[1], status, strlen(status)) < 0)
@@ -505,7 +505,7 @@ int main(int argc, char *argv[])
                     _exit(WRITE_ERROR);
                 }
 
-                print_log("Status request sent (executer).\n", log_file, false);
+                // print_log("Status request sent (executer).\n", log_file, false);
 
                 char status[BUFSIZ];
                 if (read(dispacher_com[0], status, BUFSIZ) < 0)
@@ -537,6 +537,45 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
+                    Job to_execute = create_job(message, argv[2]);
+
+                    /*
+                    // printf("from: %s\nto: %s\nfifo: %s\nop_len: %d\n", to_execute.from, to_execute.to, to_execute.fifo, to_execute.op_len);
+                    // for (int i = 0; i < to_execute.op_len; i++) print_info(to_execute.operations[i]);
+                    */
+
+                    execute(to_execute);
+
+                    // bool x = check_resources(to_execute, config);
+                    // x 
+                    // ? printf("true\n")
+                    // : printf("false\n");
+
+                    // bool has_to_wait = true;
+                    // while (has_to_wait)
+                    // {
+                    //     if (check_resources(to_execute, config))
+                    //     {
+                    //         has_to_wait = false;
+                    //         /* Can execute job. */
+
+                    //         print_info("Executing job.\n");
+                    //         pid_t new_job = fork();
+                    //         if (new_job < 0)
+                    //         {
+                    //             print_error("Could not fork process (contex: executer).\n");
+                    //             _exit(FORK_ERROR);
+                    //         }
+
+                    //         if (new_job == 1)
+                    //         {
+                    //             execute(to_execute);
+                    //             /* Write to client. */
+                    //             _exit(EXIT_SUCCESS);
+                    //         }
+                    //     }
+                    // }
+
                     /* Processar string com o job. */
                     /*
                         1º Converter a string em (Input)
@@ -546,8 +585,6 @@ int main(int argc, char *argv[])
                         3º Enviar mensagem de status ao cliente
                     */
                 }
-
-                sleep(1);
             }
 
             close(dispacher_com[0]);
@@ -556,5 +593,6 @@ int main(int argc, char *argv[])
     }
 
     wait(NULL); // Espera pelo processo 'child process (main)'.
+    close(log_file);
     return 0;
 }

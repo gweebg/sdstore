@@ -13,7 +13,7 @@
  *
  * @param job Job to be executed.
  */
-void execute(Input job)
+void execute(Job job)
 {
     /*
     Exemplos de comandos:

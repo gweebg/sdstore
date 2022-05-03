@@ -2,4 +2,4 @@
 
 #include "server.h"
 
-void execute(Input job);
+void execute(Job job);
