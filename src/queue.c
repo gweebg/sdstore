@@ -86,7 +86,6 @@ PreProcessedInput pop(PriorityQueue *queue)
     }
     else 
     {
-        print_log("The queue is empty.\n");
         PreProcessedInput error = {.valid = -1};
         return error;
     }

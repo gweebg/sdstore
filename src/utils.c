@@ -16,6 +16,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "../includes/utils.h"
 
@@ -183,8 +185,14 @@ void print_error(char *content)
  */
 void print_info(char *content)
 {
-    char* temp = malloc(sizeof(char) * (strlen(content) + 8));
-    sprintf(temp, "[*] %s", content);
+    struct timeval time_now;
+    gettimeofday(&time_now, NULL);
+
+    struct tm *time_str_tm = gmtime(&time_now.tv_sec);
+    
+    char* temp = malloc(sizeof(char) * (strlen(content) + 8) + 16);
+    sprintf(temp, "[at %02i:%02i:%02i:%06li] %s", 
+    time_str_tm->tm_hour, time_str_tm->tm_min, time_str_tm->tm_sec, time_now.tv_usec, content);
     
     write(STDOUT_FILENO, temp, strlen(temp));
     free(temp);
@@ -195,11 +203,19 @@ void print_info(char *content)
  * 
  * @param content String to print.
  */
-void print_log(char *content)
+void print_log(char *content, int log_file, bool print_to_terminal)
 {
-    char* temp = malloc(sizeof(char) * (strlen(content) + 8));
-    sprintf(temp, "[?] %s", content);
+    struct timeval time_now;
+    gettimeofday(&time_now, NULL);
+
+    struct tm *time_str_tm = gmtime(&time_now.tv_sec);
     
-    write(STDOUT_FILENO, temp, strlen(temp));
+    char* temp = malloc(sizeof(char) * (strlen(content) + 8) + 16);
+    sprintf(temp, "[DEBUG at %02i:%02i:%02i:%06li] %s", 
+    time_str_tm->tm_hour, time_str_tm->tm_min, time_str_tm->tm_sec, time_now.tv_usec, content);
+
+    write(log_file, temp, strlen(temp));
+
+    if (print_to_terminal) write(STDOUT_FILENO, temp, strlen(temp));
     free(temp);
 }

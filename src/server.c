@@ -25,10 +25,14 @@
 #include "../includes/execute.h"
 
 /* Global Variables */
-int in_use_operations[7] = {0}; /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
-Input in_execution_jobs[1024] = {0};
-int active_jobs = 0, job_number = 0;
-bool queue_in_use = false;
+int in_use_operations[7] = {0};         /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
+
+Input in_execution_jobs[1024];
+PreProcessedInput queued_jobs[1024];
+
+int active_jobs = 0, 
+    job_number = 0;
+
 
 /**
  * @brief A function that parses 'in_use_operations' and 'in_execution_jobs' array into a string
@@ -254,13 +258,20 @@ int main(int argc, char *argv[])
     const char *cts_fifo = "tmp/cts";
     mkfifo(cts_fifo, 0666);
 
-    print_log("Server is online!\n");
-    print_log("Listening for data... \n");
+    print_info("Server is online!\n");
+    print_info("Listening for data... \n");
 
     client_to_server = open(cts_fifo, O_RDONLY);
     if (client_to_server < 0) 
     {
         print_error("Failed to open FIFO <cts in server.c>\n");
+        _exit(OPEN_ERROR);
+    }
+
+    int log_file = open("logs/log.txt", O_WRONLY | O_TRUNC | O_CREAT, 0666);
+    if (log_file < 0)
+    {
+        print_error("Failed to open log file.\n");
         _exit(OPEN_ERROR);
     }
 
@@ -331,12 +342,12 @@ int main(int argc, char *argv[])
                 switch(message_status)
                 {
                     case HELP:
-                        print_log("Help requested.\n");
+                        print_log("Help requested.\n", log_file, false);
                         send_help_message(server_to_client);
                         break;
 
                     case STATUS:
-                        print_log("Status requested.\n");
+                        print_log("Status requested.\n", log_file, false);
                         break;
 
                     case PENDING:
@@ -411,7 +422,7 @@ int main(int argc, char *argv[])
 
                 if (size == EMPTY) /* Get status of the queue. */
                 {
-                    print_log("Status request received (queue_manager).\n");
+                    print_log("Status request received (queue_manager).\n", log_file, false);
 
                     char *status = is_empty(pqueue) ? "true" : "false";
                     if (write(dispacher_com[1], status, strlen(status)) < 0)
@@ -422,7 +433,7 @@ int main(int argc, char *argv[])
                 }
                 else if (size == POP) /* Pop an element from the queue. */
                 {
-                    print_log("Pop request received (queue_manager).\n");
+                    print_log("Pop request received (queue_manager).\n", log_file, false);
                     PreProcessedInput job_to_send = pop(pqueue);
 
                     int message_length = strlen(job_to_send.desc);
@@ -446,7 +457,7 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
-                    print_log("Push requested received (queue_manager).\n");
+                    print_log("Push requested received (queue_manager).\n", log_file, false);
                     PreProcessedInput job = create_ppinput(input_string);
                     if (job.valid) push(pqueue, job);
 
@@ -494,7 +505,7 @@ int main(int argc, char *argv[])
                     _exit(WRITE_ERROR);
                 }
 
-                print_log("Status request sent (executer).\n");
+                print_log("Status request sent (executer).\n", log_file, false);
 
                 char status[BUFSIZ];
                 if (read(dispacher_com[0], status, BUFSIZ) < 0)
@@ -526,7 +537,14 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
-                    printf("%s\n", message);
+                    /* Processar string com o job. */
+                    /*
+                        1º Converter a string em (Input)
+                        2º Verificar se ha recursos disponiveis
+                            | sim: update resources, executa job, update resources
+                            | nao: espera que haja recursos, executa job
+                        3º Enviar mensagem de status ao cliente
+                    */
                 }
 
                 sleep(1);

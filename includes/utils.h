@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <stdbool.h>
+
 #pragma once
 
 #define FORMAT_ERROR 1
@@ -14,8 +17,6 @@
 
 #define QSIZE        1024
 #define LUCKY_NUMBER 22
-
-#include <stdlib.h>
 
 /**
  * @brief Struct that stores the number of times an operation can run at the same time.
@@ -50,6 +51,6 @@ void print_error(char *content);
 
 void print_info(char *content);
 
-void print_log(char *content);
+void print_log(char *content, int log_file, bool print_to_terminal);
 
 void send_help_message(int server_to_client);
