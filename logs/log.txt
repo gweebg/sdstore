@@ -1,2 +1,9 @@
-[DEBUG at 14:44:05:700966] Push requested received (queue_manager).
-[DEBUG at 14:44:05:701244] Pop request received (queue_manager).
+[DEBUG at 21:33:14:572811] Push requested received (queue_manager).
+[DEBUG at 21:33:14:572952] Pop request received (queue_manager).
+[DEBUG at 21:33:19:336966] Push requested received (queue_manager).
+[DEBUG at 21:33:19:337051] Pop request received (queue_manager).
+[DEBUG at 21:33:27:305115] Push requested received (queue_manager).
+[DEBUG at 21:33:27:305250] Pop request received (queue_manager).
+[DEBUG at 21:33:38:204724] Push requested received (queue_manager).
+[DEBUG at 21:33:38:204818] Pop request received (queue_manager).
+[DEBUG at 21:33:47:352480] Help requested.

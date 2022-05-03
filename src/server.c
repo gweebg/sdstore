@@ -259,6 +259,13 @@ int main(int argc, char *argv[])
     mkfifo(cts_fifo, 0666);
 
     print_info("Server is online!\n");
+
+    Configuration config = generate_config(argv[1]);
+    // print_config(config);
+    
+    PriorityQueue *pqueue = malloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
+    init_queue(pqueue);
+
     print_info("Listening for data... \n");
 
     client_to_server = open(cts_fifo, O_RDONLY);
@@ -275,14 +282,9 @@ int main(int argc, char *argv[])
         _exit(OPEN_ERROR);
     }
 
-    Configuration config = generate_config(argv[1]);
+    int input_com[2], dispacher_com[2];
 
-    PriorityQueue *pqueue = malloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
-    init_queue(pqueue);
-
-    int input_com[2], dispacher_com[2], handler_com[2];
-
-    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(handler_com) == -1)
+    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1)
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -539,42 +541,56 @@ int main(int argc, char *argv[])
 
                     Job to_execute = create_job(message, argv[2]);
 
-                    /*
-                    // printf("from: %s\nto: %s\nfifo: %s\nop_len: %d\n", to_execute.from, to_execute.to, to_execute.fifo, to_execute.op_len);
-                    // for (int i = 0; i < to_execute.op_len; i++) print_info(to_execute.operations[i]);
-                    */
+                    bool has_to_wait = true;
+                    while (has_to_wait)
+                    {
+                        if (check_resources(to_execute, config))
+                        {
+                            has_to_wait = false;
 
-                    execute(to_execute);
+                            print_info("Executing job.\n");
+                            pid_t new_job = fork();
+                            if (new_job < 0)
+                            {
+                                print_error("Could not fork process (contex: executer).\n");
+                                _exit(FORK_ERROR);
+                            }
 
-                    // bool x = check_resources(to_execute, config);
-                    // x 
-                    // ? printf("true\n")
-                    // : printf("false\n");
+                            if (new_job == 0)
+                            {
+                                char exit_message[128];
 
-                    // bool has_to_wait = true;
-                    // while (has_to_wait)
-                    // {
-                    //     if (check_resources(to_execute, config))
-                    //     {
-                    //         has_to_wait = false;
-                    //         /* Can execute job. */
+                                struct stat *input_stat = xmalloc(sizeof(struct stat));
+                                stat(to_execute.from, input_stat);
 
-                    //         print_info("Executing job.\n");
-                    //         pid_t new_job = fork();
-                    //         if (new_job < 0)
-                    //         {
-                    //             print_error("Could not fork process (contex: executer).\n");
-                    //             _exit(FORK_ERROR);
-                    //         }
+                                struct stat *out_stat = xmalloc(sizeof(struct stat));
+                                stat(to_execute.to, input_stat);
 
-                    //         if (new_job == 1)
-                    //         {
-                    //             execute(to_execute);
-                    //             /* Write to client. */
-                    //             _exit(EXIT_SUCCESS);
-                    //         }
-                    //     }
-                    // }
+                                sprintf(exit_message, "[*] Completed (bytes-input: %ld, bytes-output: %ld)\n", 
+                                        input_stat->st_size, out_stat->st_size);
+
+                                execute(to_execute);
+
+                                int server_to_client = open(to_execute.fifo, O_WRONLY);
+                                if (server_to_client < 0)
+                                {
+                                    print_error("Could not open server to client pipe.\n");
+                                    _exit(OPEN_ERROR);
+                                }
+
+                                if (write(server_to_client, exit_message, strlen(exit_message)) < 0)
+                                {
+                                    print_error("Could not write to server to client pipe.\n");
+                                    _exit(WRITE_ERROR);
+                                }
+
+                                close(server_to_client);
+
+                                /* Write to client. */
+                                _exit(EXIT_SUCCESS);
+                            }
+                        }
+                    }
 
                     /* Processar string com o job. */
                     /*
@@ -585,6 +601,9 @@ int main(int argc, char *argv[])
                         3º Enviar mensagem de status ao cliente
                     */
                 }
+
+                /* Let's not spamm it with perma requests. */
+                sleep(0.2);
             }
 
             close(dispacher_com[0]);

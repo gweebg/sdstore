@@ -222,3 +222,12 @@ void print_log(char *content, int log_file, bool print_to_terminal)
     if (print_to_terminal) write(STDOUT_FILENO, temp, strlen(temp));
     free(temp);
 }
+
+void print_config(Configuration config)
+{
+    char string[256];
+    sprintf(string, "configuration set:\nnop:%d\ngcompress:%d\ngdecompress:%d\nbcompress:%d\nbdecompress:%d\nencrypt:%d\ndecrypt:%d\n"
+             ,config.nop, config.gcompress, config.gdecompress, config.bcompress, config.bdecompress, config.encrypt, config.decrypt);
+
+    write(STDOUT_FILENO, string, strlen(string));
+}

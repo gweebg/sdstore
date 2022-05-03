@@ -52,3 +52,5 @@ void print_info(char *content);
 void print_log(char *content, int log_file, bool print_to_terminal);
 
 void send_help_message(int server_to_client);
+
+void print_config(Configuration config);
