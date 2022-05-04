@@ -27,6 +27,9 @@ NAME_C = client
 NAME_S   = server
 NAME_S_S = server
 
+# Tudo
+all: $(NAME) $(NAME_S)
+
 # Cliente
 $(NAME): $(BIN_DIR)/$(NAME)
 
@@ -58,12 +61,17 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
 clean:
 	-rm -rf obj/* $(NAME_C)
 	-rm client
-	-rm saida/*
 	-rm tmp/*
 
 .PHONY: cleans
 cleans:
 	-rm -rf obj/* $(NAME_S)
 	-rm server
-	-rm saida/*
+	-rm tmp/*
+
+.PHONY: call
+call: 
+	-rm -rf obj/* $(NAME_C) $(NAME_S)
+	-rm client
+	-rm server
 	-rm tmp/*

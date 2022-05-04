@@ -247,6 +247,12 @@ int main(int argc, char *argv[])
     fd[1] - write
     */
 
+    if (argc == 2 && strcmp(argv[1], "help") == 0)
+    {
+        print_server_help();
+        return EXIT_SUCCESS;
+    }
+
     if (argc != 3)
     {
         print_error("Not enough arguments (expected 2).\n");
@@ -435,8 +441,12 @@ int main(int argc, char *argv[])
                 }
                 else if (size == POP) /* Pop an element from the queue. */
                 {
-                    print_log("Pop request received (queue_manager).\n", log_file, false);
                     PreProcessedInput job_to_send = pop(pqueue);
+                    
+                    char *pop_string = xmalloc(sizeof(char) * 128);
+                    sprintf(pop_string, "Pop request received from job %s (queue manager).\n", job_to_send.fifo);
+                    print_info(pop_string);
+                    free(pop_string);
 
                     int message_length = strlen(job_to_send.desc);
                     if (write(dispacher_com[1], &message_length, sizeof(int)) < 0)
@@ -463,6 +473,11 @@ int main(int argc, char *argv[])
                     PreProcessedInput job = create_ppinput(input_string);
                     if (job.valid) push(pqueue, job);
 
+                    char *push_string = xmalloc(sizeof(char) * 128);
+                    sprintf(push_string, "Push request received from job %s (queue manager).\n", job.fifo);
+                    print_info(push_string);
+                    free(push_string);
+
                     int server_to_client = open(job.fifo, O_WRONLY);
                     if (server_to_client < 0)
                     {
@@ -473,7 +488,7 @@ int main(int argc, char *argv[])
                     char *queued_messase = "[*] Job queued...\n";
                     if (write(server_to_client, queued_messase, strlen(queued_messase)) < 0)
                     {
-                        print_error("Could not write to server toclient fifo.\n");
+                        print_error("Could not write to server to client fifo.\n");
                         _exit(WRITE_ERROR);
                     }
 
@@ -506,8 +521,6 @@ int main(int argc, char *argv[])
                     print_error("Could not write to input_com.\n");
                     _exit(WRITE_ERROR);
                 }
-
-                // print_log("Status request sent (executer).\n", log_file, false);
 
                 char status[BUFSIZ];
                 if (read(dispacher_com[0], status, BUFSIZ) < 0)
@@ -548,24 +561,22 @@ int main(int argc, char *argv[])
                         {
                             has_to_wait = false;
 
-                            print_info("Executing job.\n");
                             pid_t new_job = fork();
                             if (new_job < 0)
                             {
-                                print_error("Could not fork process (contex: executer).\n");
+                                print_error("Could not fork process (context: executer).\n");
                                 _exit(FORK_ERROR);
                             }
 
                             if (new_job == 0)
                             {
-                                char exit_message[128];
-
                                 struct stat *input_stat = xmalloc(sizeof(struct stat));
                                 stat(to_execute.from, input_stat);
 
                                 struct stat *out_stat = xmalloc(sizeof(struct stat));
                                 stat(to_execute.to, input_stat);
 
+                                char exit_message[128];
                                 sprintf(exit_message, "[*] Completed (bytes-input: %ld, bytes-output: %ld)\n", 
                                         input_stat->st_size, out_stat->st_size);
 
@@ -586,9 +597,16 @@ int main(int argc, char *argv[])
 
                                 close(server_to_client);
 
+                                char *exec_string = xmalloc(sizeof(char) * 128);
+                                sprintf(exec_string, "Executed job (%s).\n", to_execute.fifo);
+                                print_info(exec_string);
+                                free(exec_string);
+
                                 /* Write to client. */
                                 _exit(EXIT_SUCCESS);
                             }
+
+                            wait(NULL);
                         }
                     }
 

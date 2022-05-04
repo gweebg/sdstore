@@ -168,6 +168,29 @@ void send_help_message(int server_to_client)
 }
 
 /**
+ * @brief Prints on the STDOUT_FILENO the help menu for the server.
+ */
+void print_server_help()
+{
+    write(STDOUT_FILENO,
+          "usage: ./server config-file tools\n"
+          "Listen to requests from the client as jobs and execute them.\n"
+          "Arguments:\n"
+          "config-file    : path to the configuration file for the max capacity for each operation (example file 'config.conf' bellow)\n\n"
+          "                         nop 10\n"
+          "                         bcompress 10\n"
+          "                         bdecompress 10\n"
+          "example 'config.conf' :  gcompress 10\n"
+          "                         gdecompress 10\n"
+          "                         encrypt 10\n"
+          "                         decrypt 10\n\n"
+          "tools          : path to where the tools nop, bcompress, bdecompress, gcompress, gdecompress, encrypt and decrypt are stored\n"
+          "You can run up to 1024 concurrent requests to the server and the queue is updated from 0.2 to 0.2 seconds.\n"
+          "Larger files will take longer to process (also depend on the operations).\n"
+          ,799);
+}
+
+/**
  * @brief Helper function to print out error messages using the 'write' function.
  * 
  * @param content String to print.
@@ -219,15 +242,6 @@ void print_log(char *content, int log_file, bool print_to_terminal)
 
     write(log_file, temp, strlen(temp));
 
-    if (print_to_terminal) write(STDOUT_FILENO, temp, strlen(temp));
+    if (print_to_terminal) print_info(temp);
     free(temp);
-}
-
-void print_config(Configuration config)
-{
-    char string[256];
-    sprintf(string, "configuration set:\nnop:%d\ngcompress:%d\ngdecompress:%d\nbcompress:%d\nbdecompress:%d\nencrypt:%d\ndecrypt:%d\n"
-             ,config.nop, config.gcompress, config.gdecompress, config.bcompress, config.bdecompress, config.encrypt, config.decrypt);
-
-    write(STDOUT_FILENO, string, strlen(string));
 }
