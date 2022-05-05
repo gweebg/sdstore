@@ -23,6 +23,7 @@
 #include "../includes/utils.h"
 #include "../includes/queue.h"
 #include "../includes/execute.h"
+#include "../includes/llist.h"
 
 /* Global Variables */
 /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
@@ -356,6 +357,14 @@ int main(int argc, char *argv[])
 
                     case STATUS:
                         print_log("Status requested.\n", log_file, false);
+
+                        int stat_message = STAT; 
+                        if (write(input_com[1], &stat_message, sizeof(int)) < 0)
+                        {
+                            write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
+                            _exit(WRITE_ERROR);
+                        }
+
                         break;
 
                     case PENDING:
@@ -417,6 +426,9 @@ int main(int argc, char *argv[])
             close(input_com[1]);
             close(dispacher_com[0]);
 
+            /* Queued Jobs Struct */
+            struct Node *queued_jobs = NULL;
+
             char input_string[BUFSIZ];
             while (true)
             {
@@ -460,6 +472,21 @@ int main(int argc, char *argv[])
                         print_error("Could not write to server to client fifo.\n");
                         _exit(WRITE_ERROR);
                     }
+
+                    /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
+                    llist_delete(&queued_jobs, job_to_send.fifo);
+                    
+                }
+                else if (size == STAT)
+                {
+                    char status_string[BUFSIZ];
+
+                    struct Node *temp = queued_jobs;
+                    while (temp)
+                    {
+                        printf("job queued up (id: %s)\n", temp->data.fifo);
+                        temp = temp->next;
+                    }
                 }
                 else /* Push an element to the queue. */
                 {
@@ -472,6 +499,9 @@ int main(int argc, char *argv[])
                     print_log("Push requested received (queue_manager).\n", log_file, false);
                     PreProcessedInput job = create_ppinput(input_string);
                     if (job.valid) push(pqueue, job);
+
+                    /* Put queued job onto the queued_jobs structure. */
+                    llist_push(&queued_jobs, job);
 
                     char *push_string = xmalloc(sizeof(char) * 128);
                     sprintf(push_string, "Push request received from job %s (queue manager).\n", job.fifo);
@@ -621,7 +651,7 @@ int main(int argc, char *argv[])
                 }
 
                 /* Let's not spamm it with perma requests. */
-                sleep(0.2);
+                sleep(0.1);
             }
 
             close(dispacher_com[0]);

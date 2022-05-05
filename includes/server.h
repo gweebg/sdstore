@@ -2,6 +2,7 @@
 
 #define POP -22
 #define EMPTY -30
+#define STAT -27
 
 /**
  * @brief Status enum that describes the progress of a job.
