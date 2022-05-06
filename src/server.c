@@ -475,18 +475,24 @@ int main(int argc, char *argv[])
 
                     /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
                     llist_delete(&queued_jobs, job_to_send.fifo);
-                    
                 }
                 else if (size == STAT)
                 {
-                    char status_string[BUFSIZ];
+                    char *status_string = xmalloc(sizeof(char) * BUFSIZ);
 
                     struct Node *temp = queued_jobs;
                     while (temp)
                     {
-                        printf("job queued up (id: %s)\n", temp->data.fifo);
+                        char *current_job = xmalloc(sizeof(char) * BUFSIZ);        
+                        sprintf(temp, "[Job @ %s - QUEUED] %s",temp->data.fifo, temp->data.desc);
+
+                        strncat(status_string, current_job, strlen(current_job) + 1);
+                        free(temp);
+
                         temp = temp->next;
                     }
+
+                    free(status_string);
                 }
                 else /* Push an element to the queue. */
                 {
@@ -537,6 +543,9 @@ int main(int argc, char *argv[])
         {
             close(dispacher_com[1]);
             close(input_com[0]);
+
+            /* Executing Jobs Struct */
+            struct Node *executing_jobs = NULL;
 
             while(true)
             {
@@ -600,6 +609,8 @@ int main(int argc, char *argv[])
 
                             if (new_job == 0)
                             {
+                                print_info("JOB RUNNING\n");
+
                                 struct stat *input_stat = xmalloc(sizeof(struct stat));
                                 stat(to_execute.from, input_stat);
 
@@ -636,7 +647,7 @@ int main(int argc, char *argv[])
                                 _exit(EXIT_SUCCESS);
                             }
 
-                            wait(NULL);
+                            // wait(NULL);
                         }
                     }
 
@@ -648,6 +659,19 @@ int main(int argc, char *argv[])
                             | nao: espera que haja recursos, executa job
                         3º Enviar mensagem de status ao cliente
                     */
+                }
+                else if (strncmp(status, "[Job", 4) == 0)
+                {
+                    /* Then we received a status message! */
+                    char *status_half = xmalloc(sizeof(char) * BUFSIZ);
+
+                    if (read(dispacher_com[1], status_half, BUFSIZ) < 0)
+                    {
+                        print_error("Could not read from dispacher_com.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    free(status_half);
                 }
 
                 /* Let's not spamm it with perma requests. */
