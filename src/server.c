@@ -268,7 +268,6 @@ int main(int argc, char *argv[])
     print_info("Server is online!\n");
 
     Configuration config = generate_config(argv[1]);
-    // print_config(config);
     
     PriorityQueue *pqueue = malloc(sizeof(PriorityQueue) + sizeof(PreProcessedInput) * QSIZE);
     init_queue(pqueue);
@@ -353,6 +352,7 @@ int main(int argc, char *argv[])
                     case HELP:
                         print_log("Help requested.\n", log_file, false);
                         send_help_message(server_to_client);
+
                         break;
 
                     case STATUS:
@@ -476,23 +476,52 @@ int main(int argc, char *argv[])
                     /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
                     llist_delete(&queued_jobs, job_to_send.fifo);
                 }
-                else if (size == STAT)
+                else if (size == STAT) /* Retrieve informataion about the state of the queue. */
                 {
-                    char *status_string = xmalloc(sizeof(char) * BUFSIZ);
+                    print_log("Status message received.\n", log_file, true);
 
-                    struct Node *temp = queued_jobs;
-                    while (temp)
+                    char *to_send_fifo = xmalloc(sizeof(char) * 32);
+                    if (read(input_com[0], to_send_fifo, sizeof(to_send_fifo)) < 0)
                     {
-                        char *current_job = xmalloc(sizeof(char) * BUFSIZ);        
-                        sprintf(temp, "[Job @ %s - QUEUED] %s",temp->data.fifo, temp->data.desc);
-
-                        strncat(status_string, current_job, strlen(current_job) + 1);
-                        free(temp);
-
-                        temp = temp->next;
+                        print_error("Could not read from input_com (context_status).\n");
+                        _exit(READ_ERROR);
                     }
 
-                    free(status_string);
+                    char *status_half = xmalloc(sizeof(char) * 1024);
+                    sprintf(status_half, "%s\nQueued Up Jobs:\n", to_send_fifo); /* stc_*****\n */
+
+                    free(to_send_fifo);
+
+                    struct Node *temp = queued_jobs;
+
+                    int counter = 0;
+                    while (temp)
+                    {   
+                        char *each_job = xmalloc(sizeof(char) * 256);
+                        sprintf(each_job, "[%d] %s\n", counter, temp->data);
+
+                        strcat(status_half, each_job);
+
+                        temp = temp->next; counter++;
+                        free(each_job);
+                    } /* stc_*****\nstc_***** -p 10 in.txt out.txt nop nop nop\n ... */
+
+                    char *signal = "stc";
+                    if (write(dispacher_com[1], signal, strlen(signal)) < 0)
+                    {
+                        print_error("Could not write to dispacher_com (context: status).\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    printf("%s\n", status_half);
+
+                    if (write(dispacher_com[1], status_half, strlen(status_half)) < 0)
+                    {
+                        print_error("Could not write to dispacher_com (context: status).\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    free(status_half);
                 }
                 else /* Push an element to the queue. */
                 {
@@ -507,7 +536,7 @@ int main(int argc, char *argv[])
                     if (job.valid) push(pqueue, job);
 
                     /* Put queued job onto the queued_jobs structure. */
-                    llist_push(&queued_jobs, job);
+                    llist_push(&queued_jobs, job.desc);
 
                     char *push_string = xmalloc(sizeof(char) * 128);
                     sprintf(push_string, "Push request received from job %s (queue manager).\n", job.fifo);
@@ -568,7 +597,7 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                if (strncmp(status, "false", 4) == 0)
+                if (strncmp(status, "false", 5) == 0)
                 {
                     int pop_message = POP;
                     if (write(input_com[1], &pop_message, sizeof(int)) < 0)
@@ -592,6 +621,7 @@ int main(int argc, char *argv[])
                     }
 
                     Job to_execute = create_job(message, argv[2]);
+                    llist_push(&executing_jobs, to_execute.desc);
 
                     bool has_to_wait = true;
                     while (has_to_wait)
@@ -649,27 +679,66 @@ int main(int argc, char *argv[])
 
                             // wait(NULL);
                         }
-                    }
 
-                    /* Processar string com o job. */
-                    /*
-                        1º Converter a string em (Input)
-                        2º Verificar se ha recursos disponiveis
-                            | sim: update resources, executa job, update resources
-                            | nao: espera que haja recursos, executa job
-                        3º Enviar mensagem de status ao cliente
-                    */
+                        llist_delete(&executing_jobs, to_execute.desc);
+                    }                    
                 }
-                else if (strncmp(status, "[Job", 4) == 0)
+                else if (strncmp(status, "stc", 3) == 0)
                 {
-                    /* Then we received a status message! */
-                    char *status_half = xmalloc(sizeof(char) * BUFSIZ);
+                    print_log("status message on executer.\n", log_file, true);
 
-                    if (read(dispacher_com[1], status_half, BUFSIZ) < 0)
+                    /* Then we received a status message! */
+                    char *status_half = xmalloc(sizeof(char) * 1024);
+                    if (read(dispacher_com[0], status_half, 1024) < 0)
                     {
                         print_error("Could not read from dispacher_com.\n");
                         _exit(READ_ERROR);
                     }
+
+                    /*
+                    The read string contains the following format:
+                    where_to_send_fifo
+                    queued_job_one
+                    ...
+                    queued_job_n
+                    */
+
+                    char *stc_fifo = strtok(status_half, "\n");
+                    char *second_status_half = xmalloc(sizeof(char) * 1024);
+
+                    strcpy(second_status_half, "In Execution Jobs:\n");
+
+                    struct Node *temp = executing_jobs;
+                    int counter = 0;
+                    while (temp)
+                    {
+                        char *current_job = xmalloc(sizeof(char) * 256);
+                        sprintf(current_job, "[%d] %s\n", counter, temp->data);
+
+                        strcat(second_status_half, current_job);
+                        temp = temp->next; counter++;
+
+                        free(current_job);
+                    }
+
+                    char *status = xmalloc(sizeof(char) * BUFSIZ);
+                    sprintf(status, "[SERVER STATUS]\n%s%s", status_half, second_status_half);
+
+                    int server_to_client = open(stc_fifo, O_WRONLY);
+                    if (server_to_client < 0)
+                    {
+                        print_error("Could not open server to client fifo (context: status).\n");
+                        _exit(OPEN_ERROR);
+                    }
+
+                    if (write(server_to_client, status, strlen(status)) < 0)
+                    if (server_to_client < 0)
+                    {
+                        print_error("Could not write to server to client fifo (context: status).\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    close(server_to_client);
 
                     free(status_half);
                 }

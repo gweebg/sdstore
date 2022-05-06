@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
             /* 848 is the size of the help message. */
             if (bytes_read >= 848) return EXIT_SUCCESS;
             if (strncmp(string, "[*] Completed", 13) == 0) return EXIT_SUCCESS;
+            if (strncmp(string, "[SERVER STATUS]", 15) == 0) return EXIT_SUCCESS;
 
         }
     }

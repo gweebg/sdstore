@@ -242,6 +242,6 @@ void print_log(char *content, int log_file, bool print_to_terminal)
 
     write(log_file, temp, strlen(temp));
 
-    if (print_to_terminal) print_info(temp);
+    if (print_to_terminal) write(STDOUT_FILENO, temp, strlen(temp));
     free(temp);
 }
