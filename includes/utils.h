@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "llist.h"
+
 #pragma once
 
 #define FORMAT_ERROR 1
@@ -54,3 +56,7 @@ void print_log(char *content, int log_file, bool print_to_terminal);
 void send_help_message(int server_to_client);
 
 void print_server_help();
+
+void generate_status_message_from_queued(char *dest, struct Node *llist, char *fifo_id);
+
+void generate_status_message_from_executing(char *dest, struct Node *llist);

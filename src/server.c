@@ -288,9 +288,9 @@ int main(int argc, char *argv[])
         _exit(OPEN_ERROR);
     }
 
-    int input_com[2], dispacher_com[2];
+    int input_com[2], dispacher_com[2], status_com[2];
 
-    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1)
+    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(status_com) == -1)
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -360,6 +360,12 @@ int main(int argc, char *argv[])
 
                         int stat_message = STAT; 
                         if (write(input_com[1], &stat_message, sizeof(int)) < 0)
+                        {
+                            write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
+                            _exit(WRITE_ERROR);
+                        }
+
+                        if (write(input_com[1], stc_fifo, strlen(stc_fifo)) < 0)
                         {
                             write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
                             _exit(WRITE_ERROR);
@@ -478,50 +484,37 @@ int main(int argc, char *argv[])
                 }
                 else if (size == STAT) /* Retrieve informataion about the state of the queue. */
                 {
-                    print_log("Status message received.\n", log_file, true);
-
-                    char *to_send_fifo = xmalloc(sizeof(char) * 32);
-                    if (read(input_com[0], to_send_fifo, sizeof(to_send_fifo)) < 0)
+                    char *stc_fifo = xmalloc(sizeof(char) * 16);
+                    if (read(input_com[0], stc_fifo, 16) < 0)
                     {
                         print_error("Could not read from input_com (context_status).\n");
                         _exit(READ_ERROR);
                     }
 
                     char *status_half = xmalloc(sizeof(char) * 1024);
-                    sprintf(status_half, "%s\nQueued Up Jobs:\n", to_send_fifo); /* stc_*****\n */
+                    generate_status_message_from_queued(status_half, queued_jobs, stc_fifo);
 
-                    free(to_send_fifo);
-
-                    struct Node *temp = queued_jobs;
-
-                    int counter = 0;
-                    while (temp)
-                    {   
-                        char *each_job = xmalloc(sizeof(char) * 256);
-                        sprintf(each_job, "[%d] %s\n", counter, temp->data);
-
-                        strcat(status_half, each_job);
-
-                        temp = temp->next; counter++;
-                        free(each_job);
-                    } /* stc_*****\nstc_***** -p 10 in.txt out.txt nop nop nop\n ... */
-
-                    char *signal = "stc";
+                    char *signal = "status";
                     if (write(dispacher_com[1], signal, strlen(signal)) < 0)
                     {
                         print_error("Could not write to dispacher_com (context: status).\n");
                         _exit(WRITE_ERROR);
                     }
 
-                    printf("%s\n", status_half);
-
-                    if (write(dispacher_com[1], status_half, strlen(status_half)) < 0)
+                    int half_len = strlen(status_half);
+                    if (write(status_com[1], &half_len, sizeof(int)) < 0)
                     {
                         print_error("Could not write to dispacher_com (context: status).\n");
                         _exit(WRITE_ERROR);
                     }
 
-                    free(status_half);
+                    if (write(status_com[1], status_half, half_len) < 0)
+                    {
+                        print_error("Could not write to dispacher_com (context: status).\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    free(stc_fifo);
                 }
                 else /* Push an element to the queue. */
                 {
@@ -578,11 +571,6 @@ int main(int argc, char *argv[])
 
             while(true)
             {
-                /* 1º ver se a queue tem elementos. */
-                /*    -> mandar para o input_com[0] 'status' e ler número */
-                /* 2º mandar para input_com[0] 'pop' e guardar elemento */
-                /* 3º executar job */
-
                 int status_message = EMPTY;
                 if (write(input_com[1], &status_message, sizeof(int)) < 0)
                 {
@@ -599,6 +587,8 @@ int main(int argc, char *argv[])
 
                 if (strncmp(status, "false", 5) == 0)
                 {
+
+                    printf("STATUS- false:%s\n", status);
                     int pop_message = POP;
                     if (write(input_com[1], &pop_message, sizeof(int)) < 0)
                     {
@@ -683,68 +673,56 @@ int main(int argc, char *argv[])
                         llist_delete(&executing_jobs, to_execute.desc);
                     }                    
                 }
-                else if (strncmp(status, "stc", 3) == 0)
+                else if (strncmp(status, "status", 6) == 0)
                 {
-                    print_log("status message on executer.\n", log_file, true);
-
                     /* Then we received a status message! */
-                    char *status_half = xmalloc(sizeof(char) * 1024);
-                    if (read(dispacher_com[0], status_half, 1024) < 0)
+
+                    int first_half_len;
+                    if (read(status_com[0], &first_half_len, sizeof(int)) < 0)
                     {
-                        print_error("Could not read from dispacher_com.\n");
-                        _exit(READ_ERROR);
+                        print_error("Could not read from status_com pipe (context: status).\n");
+                        exit(READ_ERROR);
                     }
 
-                    /*
-                    The read string contains the following format:
-                    where_to_send_fifo
-                    queued_job_one
-                    ...
-                    queued_job_n
-                    */
-
-                    char *stc_fifo = strtok(status_half, "\n");
-                    char *second_status_half = xmalloc(sizeof(char) * 1024);
-
-                    strcpy(second_status_half, "In Execution Jobs:\n");
-
-                    struct Node *temp = executing_jobs;
-                    int counter = 0;
-                    while (temp)
+                    char first_half[first_half_len];
+                    if (read(status_com[0], first_half, first_half_len) < 0)
                     {
-                        char *current_job = xmalloc(sizeof(char) * 256);
-                        sprintf(current_job, "[%d] %s\n", counter, temp->data);
-
-                        strcat(second_status_half, current_job);
-                        temp = temp->next; counter++;
-
-                        free(current_job);
+                        print_error("Could not read from status_com pipe (context: status).\n");
+                        exit(READ_ERROR);
                     }
 
-                    char *status = xmalloc(sizeof(char) * BUFSIZ);
-                    sprintf(status, "[SERVER STATUS]\n%s%s", status_half, second_status_half);
+                    char *treated_first_half = xmalloc(sizeof(char) * strlen(first_half));
+                    char *stc_fifo = strtok_r(first_half, "\n", &treated_first_half);
+                    stc_fifo[strlen(stc_fifo) - 1] = '\0';
+
+                    char *second_half = xmalloc(sizeof(char) * 1024);
+                    generate_status_message_from_executing(second_half, executing_jobs);
+
+                    char *final_status = xmalloc(sizeof(char) * (strlen(status) + strlen(second_half)));
+                    sprintf(final_status, "[SERVER STATUS]\n%s%s", treated_first_half, second_half);
 
                     int server_to_client = open(stc_fifo, O_WRONLY);
                     if (server_to_client < 0)
                     {
                         print_error("Could not open server to client fifo (context: status).\n");
-                        _exit(OPEN_ERROR);
+                        exit(OPEN_ERROR);
                     }
 
-                    if (write(server_to_client, status, strlen(status)) < 0)
+                    if (write(server_to_client, final_status, strlen(final_status)) < 0)
                     if (server_to_client < 0)
                     {
                         print_error("Could not write to server to client fifo (context: status).\n");
-                        _exit(WRITE_ERROR);
+                        exit(WRITE_ERROR);
                     }
 
                     close(server_to_client);
 
-                    free(status_half);
+                    free(second_half); free(final_status);
                 }
 
+                memset(status, 0, BUFSIZ);
                 /* Let's not spamm it with perma requests. */
-                sleep(0.1);
+                sleep(3);
             }
 
             close(dispacher_com[0]);

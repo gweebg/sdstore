@@ -20,6 +20,7 @@
 #include <sys/time.h>
 
 #include "../includes/utils.h"
+#include "../includes/llist.h"
 
 /**
  * @brief A better version of malloc that removes the work of checking for error->
@@ -244,4 +245,48 @@ void print_log(char *content, int log_file, bool print_to_terminal)
 
     if (print_to_terminal) write(STDOUT_FILENO, temp, strlen(temp));
     free(temp);
+}
+
+void generate_status_message_from_queued(char *dest, struct Node *llist, char *fifo_id)
+{
+    sprintf(dest, "%s\nQueued Up Jobs:\n", fifo_id);
+
+    struct Node *temp = llist;
+    if (temp) /* If the list contains elements... */
+    {
+        int counter = 0;
+        while (temp)
+        {   
+            char *each_job = xmalloc(sizeof(char) * 256);
+            sprintf(each_job, "[%d] %s\n", counter, temp->data);
+
+            strcat(dest, each_job);
+
+            temp = temp->next; counter++;
+            free(each_job);
+        }
+    }
+    else strcat(dest, "-- no jobs queued up --\n");
+}
+
+void generate_status_message_from_executing(char *dest, struct Node *llist)
+{
+    strcpy(dest, "In Execution Jobs:\n");
+
+    struct Node *temp = llist;
+    if (temp)
+    {
+        int counter = 0;
+        while (temp)
+        {
+            char *current_job = xmalloc(sizeof(char) * 256);
+            sprintf(current_job, "[%d] %s\n", counter, temp->data);
+
+            strcat(dest, current_job);
+            temp = temp->next; counter++;
+
+            free(current_job);
+        }
+    }
+    else strcat(dest, "-- no jobs currently executing --\n");
 }

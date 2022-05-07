@@ -1,3 +1,1 @@
-[DEBUG at 19:25:19:998117] Status requested.
-[DEBUG at 19:25:19:998145] Status message received.
-[DEBUG at 19:25:19:998226] status message on executer.
+[DEBUG at 11:21:05:459509] Status requested.
