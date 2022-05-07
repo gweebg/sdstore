@@ -357,20 +357,6 @@ int main(int argc, char *argv[])
 
                     case STATUS:
                         print_log("Status requested.\n", log_file, false);
-
-                        int stat_message = STAT; 
-                        if (write(input_com[1], &stat_message, sizeof(int)) < 0)
-                        {
-                            write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
-                            _exit(WRITE_ERROR);
-                        }
-
-                        if (write(input_com[1], stc_fifo, strlen(stc_fifo)) < 0)
-                        {
-                            write(STDERR_FILENO, "Something went wrong while writing to pipe.\n", 45);
-                            _exit(WRITE_ERROR);
-                        }
-
                         break;
 
                     case PENDING:
@@ -482,40 +468,6 @@ int main(int argc, char *argv[])
                     /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
                     llist_delete(&queued_jobs, job_to_send.fifo);
                 }
-                else if (size == STAT) /* Retrieve informataion about the state of the queue. */
-                {
-                    char *stc_fifo = xmalloc(sizeof(char) * 16);
-                    if (read(input_com[0], stc_fifo, 16) < 0)
-                    {
-                        print_error("Could not read from input_com (context_status).\n");
-                        _exit(READ_ERROR);
-                    }
-
-                    char *status_half = xmalloc(sizeof(char) * 1024);
-                    generate_status_message_from_queued(status_half, queued_jobs, stc_fifo);
-
-                    char *signal = "status";
-                    if (write(dispacher_com[1], signal, strlen(signal)) < 0)
-                    {
-                        print_error("Could not write to dispacher_com (context: status).\n");
-                        _exit(WRITE_ERROR);
-                    }
-
-                    int half_len = strlen(status_half);
-                    if (write(status_com[1], &half_len, sizeof(int)) < 0)
-                    {
-                        print_error("Could not write to dispacher_com (context: status).\n");
-                        _exit(WRITE_ERROR);
-                    }
-
-                    if (write(status_com[1], status_half, half_len) < 0)
-                    {
-                        print_error("Could not write to dispacher_com (context: status).\n");
-                        _exit(WRITE_ERROR);
-                    }
-
-                    free(stc_fifo);
-                }
                 else /* Push an element to the queue. */
                 {
                     if (read(input_com[0], input_string, sizeof(char) * size) < 0)
@@ -587,8 +539,6 @@ int main(int argc, char *argv[])
 
                 if (strncmp(status, "false", 5) == 0)
                 {
-
-                    printf("STATUS- false:%s\n", status);
                     int pop_message = POP;
                     if (write(input_com[1], &pop_message, sizeof(int)) < 0)
                     {
@@ -673,56 +623,8 @@ int main(int argc, char *argv[])
                         llist_delete(&executing_jobs, to_execute.desc);
                     }                    
                 }
-                else if (strncmp(status, "status", 6) == 0)
-                {
-                    /* Then we received a status message! */
-
-                    int first_half_len;
-                    if (read(status_com[0], &first_half_len, sizeof(int)) < 0)
-                    {
-                        print_error("Could not read from status_com pipe (context: status).\n");
-                        exit(READ_ERROR);
-                    }
-
-                    char first_half[first_half_len];
-                    if (read(status_com[0], first_half, first_half_len) < 0)
-                    {
-                        print_error("Could not read from status_com pipe (context: status).\n");
-                        exit(READ_ERROR);
-                    }
-
-                    char *treated_first_half = xmalloc(sizeof(char) * strlen(first_half));
-                    char *stc_fifo = strtok_r(first_half, "\n", &treated_first_half);
-                    stc_fifo[strlen(stc_fifo) - 1] = '\0';
-
-                    char *second_half = xmalloc(sizeof(char) * 1024);
-                    generate_status_message_from_executing(second_half, executing_jobs);
-
-                    char *final_status = xmalloc(sizeof(char) * (strlen(status) + strlen(second_half)));
-                    sprintf(final_status, "[SERVER STATUS]\n%s%s", treated_first_half, second_half);
-
-                    int server_to_client = open(stc_fifo, O_WRONLY);
-                    if (server_to_client < 0)
-                    {
-                        print_error("Could not open server to client fifo (context: status).\n");
-                        exit(OPEN_ERROR);
-                    }
-
-                    if (write(server_to_client, final_status, strlen(final_status)) < 0)
-                    if (server_to_client < 0)
-                    {
-                        print_error("Could not write to server to client fifo (context: status).\n");
-                        exit(WRITE_ERROR);
-                    }
-
-                    close(server_to_client);
-
-                    free(second_half); free(final_status);
-                }
-
                 memset(status, 0, BUFSIZ);
-                /* Let's not spamm it with perma requests. */
-                sleep(3);
+                sleep(0.2);
             }
 
             close(dispacher_com[0]);
