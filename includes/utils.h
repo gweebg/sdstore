@@ -63,6 +63,8 @@ void generate_status_message_from_queued(char *dest, struct Node *llist, char *f
 
 void generate_status_message_from_executing(char *dest, struct Node *llist);
 
+void generate_status_message_from_resources(char *dest, int *resources, Configuration config);
+
 void generate_completed_message(char *dest, char *in, char *out);
 
 void send_status_to_client(char *fifo, char *content);

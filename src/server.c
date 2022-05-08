@@ -186,9 +186,11 @@ int main(int argc, char *argv[])
     }
 
     /* In between processes pipes */
-    int input_com[2], dispacher_com[2], job_string[2], pop_com[2];
+    int input_com[2], dispacher_com[2], 
+        job_string[2], pop_com[2], stat_com[2], exec_com[2];
 
-    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(job_string) == -1 || pipe(pop_com) == -1)
+    if (pipe(input_com)  == -1 || pipe(dispacher_com) == -1 || pipe(exec_com) == -1 ||
+        pipe(job_string) == -1 || pipe(pop_com)       == -1 || pipe(stat_com) == -1  )
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -212,6 +214,7 @@ int main(int argc, char *argv[])
 
         close(input_com[0]);
         close(job_string[0]);
+        close(stat_com[0]);
 
         char arguments[BUFSIZ];
         while(true)
@@ -231,7 +234,7 @@ int main(int argc, char *argv[])
             
             if (strncmp(arguments, "tmp", 3) == 0) 
             {
-                char *stc_fifo = malloc(sizeof(char) * 1024);
+                char *stc_fifo = xmalloc(sizeof(char) * 1024);
                 int message_status = get_status(strdup(arguments), stc_fifo);
 
                 /* Making sure the '\0' is present to avoid any memory leaks. */
@@ -252,12 +255,33 @@ int main(int argc, char *argv[])
                 switch(message_status)
                 {
                     case HELP:
-                        // print_log("Help requested.\n", log_file, false);
+                        print_log("Help requested.\n", log_file, false);
                         send_help_message(server_to_client);
                         break;
 
                     case STATUS:
                         print_log("Status requested.\n", log_file, false);
+
+                        int status_signal = STAT;
+                        if (write(input_com[1], &status_signal, sizeof(int)) < 0)
+                        {
+                            print_error("Could not write 'STAT' message to input_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
+
+                        /* Enviar o fifo ao q_manager pelo stat_com. */
+                        int fifo_length = strlen(stc_fifo) + 1;
+                        if (write(stat_com[1], &fifo_length, sizeof(int)) < 0)
+                        {
+                            print_error("Could not write 'fifo_length' integer to stat_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
+
+                        if (write(stat_com[1], stc_fifo, fifo_length) < 0)
+                        {
+                            print_error("Could not write 'stc_fifo' fifo to stat_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
                         break;
 
                     case PENDING:
@@ -298,6 +322,8 @@ int main(int argc, char *argv[])
         }
 
         close(client_to_server);
+        
+        close(stat_com[1]);
         close(input_com[1]);
         close(job_string[1]);
 
@@ -320,11 +346,13 @@ int main(int argc, char *argv[])
             Input struct into the priority queue.
             */
 
+            close(stat_com[1]);
             close(job_string[1]);
             close(input_com[1]);
 
             close(dispacher_com[0]);
             close(pop_com[0]);
+            close(exec_com[0]);
 
             /* Queued Jobs Struct */
             struct Node *queued_jobs = NULL;
@@ -375,6 +403,45 @@ int main(int argc, char *argv[])
                 else if (size == STAT) /* Retrieve informataion about the state of the queue. */
                 {
                     print_log("Status message received (q_manager).\n", log_file, false);
+
+                    int message_length;
+                    if (read(stat_com[0], &message_length, sizeof(int)) < 0)
+                    {
+                        print_error("Something went wrong while reading 'message_length' from stat_com.\n");
+                        _exit(READ_ERROR);
+                    }                
+
+                    char received_str[message_length];  
+                    if (read(stat_com[0], received_str, message_length) < 0)
+                    {
+                        print_error("Something went wrong while reading string from stat_com.\n");
+                        _exit(READ_ERROR);
+                    }      
+
+                    char *status_first_half = xmalloc(sizeof(char) * 2048);
+                    generate_status_message_from_queued(status_first_half, queued_jobs, received_str);
+
+                    /* Signal the executer that I'm (q_manager) going to send status related things. */
+                    char *signal = "stats";
+                    if (write(dispacher_com[1], signal, strlen(signal) + 1) < 0)
+                    {
+                        print_error("Could not write 'stats' signal to dispacher_com.\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    message_length = strlen(status_first_half) + 1;
+                    if (write(exec_com[1], &message_length, sizeof(int)) < 0)
+                    {
+                        print_error("Could not write 'message_length' integer to exec_com.\n");
+                        _exit(WRITE_ERROR);
+                    }
+
+                    if (write(exec_com[1], status_first_half, message_length) < 0)
+                    {
+                        print_error("Could not write 'status_first_half' string to exec_com.\n");
+                        _exit(WRITE_ERROR);
+                    }
+
                 }
                 else /* Push element to the stack. */ 
                 {
@@ -429,10 +496,12 @@ int main(int argc, char *argv[])
             }
 
             close(dispacher_com[1]);
+            close(exec_com[1]);
             close(pop_com[1]);
 
             close(job_string[0]);
             close(input_com[0]);
+            close(stat_com[0]);
 
             _exit(EXIT_SUCCESS);
         }
@@ -440,6 +509,7 @@ int main(int argc, char *argv[])
         {
             close(dispacher_com[1]);
             close(pop_com[1]);
+            close(exec_com[1]);
 
             close(input_com[0]);
 
@@ -535,14 +605,46 @@ int main(int argc, char *argv[])
                         else print_log("Waiting for resources to clear up.\n", log_file, true);
                     }
 
-                    llist_delete(&executing_jobs, current_job.desc);
+                    llist_delete(&executing_jobs, current_job.fifo);
                     update_resources_usage_del(resources, current_job);
-                }        
+                }    
+                else if (strncmp(status, "stats", 5) == 0)
+                {
+                    int first_half_length;
+                    if (read(exec_com[0], &first_half_length, sizeof(int)) < 0)
+                    {
+                        print_error("Could not read 'first_half_length' from exec_com.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    char first_status_half[first_half_length];
+                    if (read(exec_com[0], first_status_half, first_half_length) < 0)
+                    {
+                        print_error("Could not read 'first_status_half' string from exec_com.\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    char *status_half;
+                    char *cts_fifo = strtok_r(first_status_half, "\n", &status_half);
+
+                    char *second_status_half = xmalloc(sizeof(char) * 2048);
+                    generate_status_message_from_executing(second_status_half, executing_jobs);
+
+                    char *third_status_half = xmalloc(sizeof(char) * 2048);
+                    generate_status_message_from_resources(third_status_half, resources, config);
+
+                    char *status = xmalloc(sizeof(char) * (strlen(status_half) + strlen(second_status_half) + strlen(third_status_half) + 16));
+                    sprintf(status, "[SERVER STATUS]\n%s%s%s\n", status_half, second_status_half, third_status_half);
+
+                    send_status_to_client(cts_fifo, status);
+                    free(second_status_half); free(third_status_half); free(status);
+                }    
 
                 sleep(1);
             }
 
             close(dispacher_com[0]);
+            close(exec_com[0]);
             close(pop_com[0]);
 
             close(input_com[1]);

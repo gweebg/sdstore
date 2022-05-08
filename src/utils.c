@@ -317,6 +317,27 @@ void generate_completed_message(char *dest, char *in, char *out)
     close(file_out);
 }
 
+void generate_status_message_from_resources(char *dest, int *resources, Configuration config)
+{
+    sprintf(dest,
+            "Resources (using/max):\n"
+            "nop:         %d/%d\n"
+            "gcompress:   %d/%d\n"
+            "gdecompress: %d/%d\n"
+            "bcompress:   %d/%d\n"
+            "bdecompress: %d/%d\n"
+            "encrypt:     %d/%d\n"
+            "decrypt:     %d/%d\n",
+            resources[0], config.nop,
+            resources[1], config.gcompress,
+            resources[2], config.gdecompress,
+            resources[3], config.bcompress,
+            resources[4], config.bdecompress,
+            resources[5], config.encrypt,
+            resources[6], config.decrypt);
+}
+
+
 void send_status_to_client(char *fifo, char *content)
 {
     int server_to_client = open(fifo, O_WRONLY);
