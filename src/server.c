@@ -291,9 +291,9 @@ int main(int argc, char *argv[])
     }
 
     /* In between processes pipes */
-    int input_com[2], dispacher_com[2], job_string[2];
+    int input_com[2], dispacher_com[2], job_string[2], pop_com[2];
 
-    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(job_string) == -1)
+    if (pipe(input_com) == -1 || pipe(dispacher_com) == -1 || pipe(job_string) == -1 || pipe(pop_com) == -1)
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -425,9 +425,11 @@ int main(int argc, char *argv[])
             Input struct into the priority queue.
             */
 
-            close(input_com[1]);
-            close(dispacher_com[0]);
             close(job_string[1]);
+            close(input_com[1]);
+
+            close(dispacher_com[0]);
+            close(pop_com[0]);
 
             /* Queued Jobs Struct */
             struct Node *queued_jobs = NULL;
@@ -443,7 +445,7 @@ int main(int argc, char *argv[])
 
                 if (size == EMPTY) /* Get status of the queue (is empty or not). */
                 {
-                    char *status = is_empty(pqueue) ? "true" : "false";
+                    char *status = is_empty(pqueue) ? "empty" : "false";
                     if (write(dispacher_com[1], status, strlen(status) + 1) < 0)
                     {
                         print_error("Could not write to server to client fifo.\n");
@@ -454,27 +456,26 @@ int main(int argc, char *argv[])
                 {
                     PreProcessedInput job_to_send = pop(pqueue);
 
-                    char *pop_string = xmalloc(sizeof(char) * 128);
-                    sprintf(pop_string, "Pop request received from job %s (queue manager).\n", job_to_send.fifo);
+                    char *pop_string = xmalloc(sizeof(char) * (45 + strlen(job_to_send.fifo)));
+                    sprintf(pop_string, "Pop request received from job %s (q_manager).\n", job_to_send.fifo);
                     print_info(pop_string);
                     free(pop_string);
 
                     int message_length = strlen(job_to_send.desc) + 1;
-                    if (write(dispacher_com[1], &message_length, sizeof(int)) < 0)
+                    if (write(pop_com[1], &message_length, sizeof(int)) < 0)
                     {
-                        print_error("Could not write to server to client fifo.\n");
+                        print_error("Could not write job.desc length (POP reques) to pop_com.\n");
                         _exit(WRITE_ERROR);
                     }
 
-                    if (write(dispacher_com[1], job_to_send.desc, message_length) < 0)
+                    if (write(pop_com[1], job_to_send.desc, message_length) < 0)
                     {
-                        print_error("Could not write to server to client fifo.\n");
+                        print_error("Could not write job.desc (POP request) to pop_com.\n");
                         _exit(WRITE_ERROR);
                     }
 
                     /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
                     llist_delete(&queued_jobs, job_to_send.fifo);
-                    
                 }
                 else if (size == STAT) /* Retrieve informataion about the state of the queue. */
                 {
@@ -532,127 +533,129 @@ int main(int argc, char *argv[])
                 }
             }
 
-            close(input_com[0]);
             close(dispacher_com[1]);
-            close(job_string[1]);
+            close(pop_com[1]);
+
+            close(job_string[0]);
+            close(input_com[0]);
 
             _exit(EXIT_SUCCESS);
         }
         else
         {
-    //         close(dispacher_com[1]);
-    //         close(input_com[0]);
+            close(dispacher_com[1]);
+            close(pop_com[1]);
 
-    //         /* Executing Jobs Struct */
-    //         struct Node *executing_jobs = NULL;
+            close(input_com[0]);
 
-    //         while(true)
-    //         {
-    //             /* 1º ver se a queue tem elementos. */
-    //             /*    -> mandar para o input_com[0] 'status' e ler número */
-    //             /* 2º mandar para input_com[0] 'pop' e guardar elemento */
-    //             /* 3º executar job */
+            /* Currently executing jobs. */
+            struct Node *executing_jobs = NULL;
 
-    //             int status_message = EMPTY;
-    //             if (write(input_com[1], &status_message, sizeof(int)) < 0)
-    //             {
-    //                 print_error("Could not write to input_com.\n");
-    //                 _exit(WRITE_ERROR);
-    //             }
+            while (true)
+            {
+                /* Check if the queue is empty or not. */
+                /* If it has elements then we pop the queue. */
 
-    //             char status[BUFSIZ];
-    //             if (read(dispacher_com[0], status, BUFSIZ) < 0)
-    //             {
-    //                 print_error("Could not read from dispacher_com.\n");
-    //                 _exit(READ_ERROR);
-    //             }
+                int status_message = EMPTY;
+                if (write(input_com[1], &status_message, sizeof(int)) < 0)
+                {
+                    print_error("Could not write 'EMPTY' message to input_com.\n");
+                    _exit(WRITE_ERROR);
+                }
 
-    //             if (strncmp(status, "false", 5) == 0)
-    //             {
-    //                 int pop_message = POP;
-    //                 if (write(input_com[1], &pop_message, sizeof(int)) < 0)
-    //                 {
-    //                     print_error("Could not write to input_com.\n");
-    //                     _exit(WRITE_ERROR);
-    //                 }
+                char status[6]; /* dispacher_com : sends empty or false to is_empty. */
+                if (read(dispacher_com[0], status, 6) < 0)
+                {
+                    print_error("Could not read 'EMPTY' response from dispacher_com.\n");
+                    _exit(READ_ERROR);
+                }
 
-    //                 int message_length;
-    //                 if (read(dispacher_com[0], &message_length, sizeof(int)) < 0)
-    //                 {
-    //                     print_error("Could not read from dispacher_com.\n");
-    //                     _exit(READ_ERROR);
-    //                 }
+                /* If status == 'false' we pop the queue sending a POP message to input_com[0] */
+                if (strncmp(status, "false", 5) == 0)
+                {
+                    int pop_message = POP;
+                    if (write(input_com[1], &pop_message, sizeof(int)) < 0)
+                    {
+                        print_error("Could not write 'POP' to input_com.\n");
+                        _exit(WRITE_ERROR);
+                    }
 
-    //                 char message[message_length];
-    //                 if (read(dispacher_com[0], message, message_length) < 0)
-    //                 {
-    //                     print_error("Could not read from dispacher_com.\n");
-    //                     _exit(READ_ERROR);
-    //                 }
+                    int response_size; /* size of the response string */
+                    if (read(pop_com[0], &response_size, sizeof(int)) < 0)
+                    {
+                        print_error("Could not read 'EMPTY' response from dispacher_com.\n");
+                        _exit(READ_ERROR);
+                    }
 
-    //                 Job to_execute = create_job(message, argv[2]);
-    //                 llist_push(&executing_jobs, to_execute.desc);
+                    char response_job[response_size];
+                    if (read(pop_com[0], response_job, response_size) < 0)
+                    {
+                        print_error("Could not read 'EMPTY' response from dispacher_com.\n");
+                        _exit(READ_ERROR);
+                    }
 
-    //                 bool has_to_wait = true;
-    //                 while (has_to_wait)
-    //                 {
-    //                     if (check_resources(to_execute, config))
-    //                     {
-    //                         has_to_wait = false;
+                    Job current_job = create_job(response_job, argv[2]);
+                    llist_push(&executing_jobs, current_job.desc);
+                    /* Dont need to check for validity because it was already checked on PreProcessedInput. */
 
-    //                         pid_t new_job = fork();
-    //                         if (new_job < 0)
-    //                         {
-    //                             print_error("Could not fork process (context: executer).\n");
-    //                             _exit(FORK_ERROR);
-    //                         }
+                    // printf("From: %s\nTo: %s\n#OP: %d\nFIFO: %s\n", 
+                    //         current_job.from, current_job.to, current_job.op_len, current_job.fifo);
+                    
+                    // for (int i = 0; i < current_job.op_len; i++) printf("%s\n",current_job.operations[i]);
 
-    //                         if (new_job == 0)
-    //                         {
-    //                             print_info("JOB RUNNING\n");
+                    bool wait = true;
+                    while (wait)
+                    {
+                        if (check_resources(current_job, config))
+                        {
+                            wait = false;
 
-    //                             struct stat *input_stat = xmalloc(sizeof(struct stat));
-    //                             stat(to_execute.from, input_stat);
+                            pid_t exec_fork = fork();
+                            if (exec_fork < 0)
+                            {
+                                print_error("Could not fork process @ executing job.\n");
+                                _exit(FORK_ERROR);
+                            }
 
-    //                             struct stat *out_stat = xmalloc(sizeof(struct stat));
-    //                             stat(to_execute.to, input_stat);
+                            if (exec_fork == 0)
+                            {
+                                print_log("Executing a job.\n", log_file, false);
 
-    //                             char exit_message[128];
-    //                             sprintf(exit_message, "[*] Completed (bytes-input: %ld, bytes-output: %ld)\n", 
-    //                                     input_stat->st_size, out_stat->st_size);
+                                execute(current_job);
 
-    //                             execute(to_execute);
+                                char *exec_string = xmalloc(sizeof(char) * 128);
+                                sprintf(exec_string, "Executed job (%s).\n", current_job.fifo);
+                                print_info(exec_string);
+                                free(exec_string);
 
-    //                             int server_to_client = open(to_execute.fifo, O_WRONLY);
-    //                             if (server_to_client < 0)
-    //                             {
-    //                                 print_error("Could not open server to client pipe.\n");
-    //                                 _exit(OPEN_ERROR);
-    //                             }
+                                char *completed_message = xmalloc(sizeof(char) * 128);
+                                generate_completed_message(completed_message, current_job.from, current_job.to);
 
-    //                             if (write(server_to_client, exit_message, strlen(exit_message)) < 0)
-    //                             {
-    //                                 print_error("Could not write to server to client pipe.\n");
-    //                                 _exit(WRITE_ERROR);
-    //                             }
+                                send_status_to_client(current_job.fifo, completed_message);
+                                _exit(EXIT_SUCCESS);
+                            }
+                        }
+                    }
 
-    //                             close(server_to_client);
+                    llist_delete(&executing_jobs, current_job.desc);
+                }        
 
-    //                             char *exec_string = xmalloc(sizeof(char) * 128);
-    //                             sprintf(exec_string, "Executed job (%s).\n", to_execute.fifo);
-    //                             print_info(exec_string);
-    //                             free(exec_string);
+                sleep(1);
+            }
 
-    //                             /* Write to client. */
-    //                             _exit(EXIT_SUCCESS);
-    //                         }
+            close(dispacher_com[0]);
+            close(pop_com[0]);
 
-    //                         // wait(NULL);
-    //                     }
+            close(input_com[1]);
+        }
+    }
 
-    //                     llist_delete(&executing_jobs, to_execute.desc);
-    //                 }                    
-    //             }
+    wait(NULL);
+    
+    close(log_file);
+    return 0;
+}
+
     //             else if (strncmp(status, "stc", 3) == 0)
     //             {
     //                 print_log("status message on executer.\n", log_file, true);
@@ -719,10 +722,3 @@ int main(int argc, char *argv[])
 
     //         close(dispacher_com[0]);
     //         close(input_com[1]);
-        }
-    }
-
-    wait(NULL); // Espera pelo processo 'child process (main)'.
-    close(log_file);
-    return 0;
-}

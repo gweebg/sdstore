@@ -289,3 +289,42 @@ void generate_status_message_from_executing(char *dest, struct Node *llist)
     }
     else strcat(dest, "-- no jobs currently executing --\n");
 }
+
+void generate_completed_message(char *dest, char *in, char *out)
+{
+    int file_in  = open(in,  O_RDONLY),
+        file_out = open(out, O_RDONLY);
+
+    if (file_out < 0 || file_in < 0)
+    {
+        print_error("Could not files 'from' and 'to'.\n");
+        exit(OPEN_ERROR);
+    }
+
+    int size_in  = lseek(file_in,  0, SEEK_END),
+        size_out = lseek(file_out, 0, SEEK_END);
+
+    sprintf(dest, "[*] Completed (bytes-input: %d, bytes-output: %d)\n", 
+            size_in, size_out);
+     
+    close(file_in);
+    close(file_out);
+}
+
+void send_status_to_client(char *fifo, char *content)
+{
+    int server_to_client = open(fifo, O_WRONLY);
+    if (server_to_client < 0)
+    {
+        print_error("Could not files 'server_to_client' @ send_status_to_client.\n");
+        exit(OPEN_ERROR);
+    }
+
+    if (write(server_to_client, content, strlen(content)) < 0)
+    {
+        print_error("Could not write content to server_to_client @ send_status_to_client.\n");
+        exit(WRITE_ERROR);
+    }
+
+    close(server_to_client);
+}

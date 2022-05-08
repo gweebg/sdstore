@@ -62,3 +62,7 @@ void print_server_help();
 void generate_status_message_from_queued(char *dest, struct Node *llist, char *fifo_id);
 
 void generate_status_message_from_executing(char *dest, struct Node *llist);
+
+void generate_completed_message(char *dest, char *in, char *out);
+
+void send_status_to_client(char *fifo, char *content);
