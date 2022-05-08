@@ -153,13 +153,6 @@ void send_help_message(int server_to_client)
                       "decrypt     : decrypts the file (ccrypt)\n"
                       "Do not forget to start the server application before running a request. Otherwise you will get a deadlock.\n";
 
-    int message = 4;
-    if (write(server_to_client, &message, sizeof(int)) < 0)
-    {
-        print_error("Could not write into FIFO. <stc> in server.c\n");
-        _exit(WRITE_ERROR);
-    }
-
     if (write(server_to_client, help_menu, strlen(help_menu)) < 0)
     {
         print_error("Could not write into FIFO. <stc> in server.c\n");
@@ -246,6 +239,13 @@ void print_log(char *content, int log_file, bool print_to_terminal)
     free(temp);
 }
 
+/**
+ * @brief Generate a string containing the dump of an struct llist.
+ * Exclusive for queued up jobs.
+ * @param dest Destination string.
+ * @param llist List to dump.
+ * @param fifo_id Fifo information to be able to send to client.
+ */
 void generate_status_message_from_queued(char *dest, struct Node *llist, char *fifo_id)
 {
     sprintf(dest, "%s\nQueued Up Jobs:\n", fifo_id);
@@ -268,6 +268,12 @@ void generate_status_message_from_queued(char *dest, struct Node *llist, char *f
     else strcat(dest, "-- no jobs queued up --\n");
 }
 
+/**
+ * @brief Generate a string containing the dump of an struct llist.
+ * Exclusive for in execution jobs.
+ * @param dest Destination string.
+ * @param llist List to dump.
+ */
 void generate_status_message_from_executing(char *dest, struct Node *llist)
 {
     strcpy(dest, "In Execution Jobs:\n");
@@ -327,4 +333,84 @@ void send_status_to_client(char *fifo, char *content)
     }
 
     close(server_to_client);
+}
+
+/**
+ * @brief Checks if there are enough resources to run a job.
+ * Does this by checking the 'in_use_operations' array.
+ * @param job Job to be checked.
+ * @param config Configuration object with the limit values.
+ * @return true, if there are enough resources, false otherwise.
+ */
+bool check_resources(Job job, Configuration config, int *in_use_operations)
+{
+    Configuration num_operations_per_type = {0}; /* Set all values to 0. */
+
+    /* Counting the number of operations of the job */
+    for (int i = 0; i < job.op_len; i++)
+    {
+        if      (strcmp(job.operations[i], "nop")         == 0) num_operations_per_type.nop++;
+        else if (strcmp(job.operations[i], "gcompress")   == 0) num_operations_per_type.gcompress++;
+        else if (strcmp(job.operations[i], "gdecompress") == 0) num_operations_per_type.gdecompress++;
+        else if (strcmp(job.operations[i], "bcompress")   == 0) num_operations_per_type.bcompress++;
+        else if (strcmp(job.operations[i], "bdecompress") == 0) num_operations_per_type.bdecompress++;
+        else if (strcmp(job.operations[i], "encrypt")     == 0) num_operations_per_type.encrypt++;
+        else                                                    num_operations_per_type.decrypt++;
+    }
+
+    /* Checking for excess resources */
+    if (num_operations_per_type.nop         + in_use_operations[0] > config.nop)         return false;
+    if (num_operations_per_type.gcompress   + in_use_operations[1] > config.gcompress)   return false;
+    if (num_operations_per_type.gdecompress + in_use_operations[2] > config.gdecompress) return false;
+    if (num_operations_per_type.bcompress   + in_use_operations[3] > config.bcompress)   return false;
+    if (num_operations_per_type.bdecompress + in_use_operations[4] > config.bdecompress) return false;
+    if (num_operations_per_type.encrypt     + in_use_operations[5] > config.encrypt)     return false;
+    if (num_operations_per_type.decrypt     + in_use_operations[6] > config.decrypt)     return false;
+
+    return true;
+}
+
+void update_resources_usage_add(int *resources, Job job_to_execute)
+{
+    /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
+    for (int i = 0; i < job_to_execute.op_len; i++)
+    {
+        if      (strcmp(job_to_execute.operations[i], "nop")         == 0) resources[0]++;
+        else if (strcmp(job_to_execute.operations[i], "gcompress")   == 0) resources[1]++;
+        else if (strcmp(job_to_execute.operations[i], "gdecompress") == 0) resources[2]++;
+        else if (strcmp(job_to_execute.operations[i], "bcompress")   == 0) resources[3]++;
+        else if (strcmp(job_to_execute.operations[i], "bdecompress") == 0) resources[4]++;
+        else if (strcmp(job_to_execute.operations[i], "encrypt")     == 0) resources[5]++;
+        else                                                               resources[6]++;
+    }
+}
+
+void update_resources_usage_del(int *resources, Job job_to_execute)
+{
+    for (int i = 0; i < job_to_execute.op_len; i++)
+    {
+        if      (strcmp(job_to_execute.operations[i], "nop")         == 0) resources[0]--;
+        else if (strcmp(job_to_execute.operations[i], "gcompress")   == 0) resources[1]--;
+        else if (strcmp(job_to_execute.operations[i], "gdecompress") == 0) resources[2]--;
+        else if (strcmp(job_to_execute.operations[i], "bcompress")   == 0) resources[3]--;
+        else if (strcmp(job_to_execute.operations[i], "bdecompress") == 0) resources[4]--;
+        else if (strcmp(job_to_execute.operations[i], "encrypt")     == 0) resources[5]--;
+        else                                                               resources[6]--;
+    }
+}
+
+int get_status(char *string, char *fifo_output)
+{
+    char *token = strtok(string, " ");   
+    if (fifo_output)
+    {
+        strcpy(fifo_output,token);
+    }
+
+    token = strtok(NULL, " ");
+    if (strcmp(token, "help") == 0) return HELP;
+    if (strcmp(token, "status") == 0) return STATUS;
+    if (strcmp(token, "proc-file") == 0) return PENDING;
+
+    return -1;
 }

@@ -1,4 +1,0 @@
-[DEBUG at 14:52:22:528716] New job received.
-[DEBUG at 14:52:22:528717] Push requested received (q_manager).
-[DEBUG at 14:52:23:529039] Executing a job.
-[DEBUG at 14:52:57:491761] Help requested.

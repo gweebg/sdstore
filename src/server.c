@@ -26,113 +26,8 @@
 #include "../includes/llist.h"
 
 /* Global Variables */
-/* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
-int in_use_operations[7] = {0};         
-
-Job in_execution_jobs[1024];
-PreProcessedInput queued_jobs[1024];
-
 int active_jobs = 0, 
     job_number = 0;
-
-
-/**
- * @brief A function that parses 'in_use_operations' and 'in_execution_jobs' array into a string
- * and displays as status.
- * @param config Configuration struct containing operation limits.
- * @return The generated status string (char*).
- */
-/*
-char *generate_status(Configuration config)
-{
-    char *operation_status = malloc(sizeof(char) * 512);
-    sprintf(operation_status, "resources status (now/max):\n" 
-                              "operation nop: %d/%d\n"
-                              "operation gcompress: %d/%d\n"
-                              "operation gdecompress: %d/%d\n"
-                              "operation bcompress: %d/%d\n"
-                              "operation bdecompress: %d/%d\n"
-                              "operation encrypt: %d/%d\n"
-                              "operation decrypt: %d/%d\n", 
-                              in_use_operations[0], config.nop,
-                              in_use_operations[1], config.gcompress,
-                              in_use_operations[2], config.gdecompress,
-                              in_use_operations[3], config.bcompress,
-                              in_use_operations[4], config.bdecompress,
-                              in_use_operations[5], config.encrypt,
-                              in_use_operations[6], config.decrypt);
-
-    char *job_status = malloc(sizeof(char) * 512);
-    strncpy(job_status, "job status (job_id (status_code): job):\n", 27);   
-
-    if (active_jobs != 0)
-        for (int i = 0; i < active_jobs; i++)
-        {
-            char *temp = malloc(sizeof(char) * 32);        
-            sprintf(temp, "job #%d (%d): %s\n", in_execution_jobs[i].id,
-                                                in_execution_jobs[i].status,
-                                                in_execution_jobs[i].desc);
-
-            strncat(job_status, temp, strlen(temp) + 1);
-            free(temp);
-        }   
-
-    char result[BUFSIZ];
-    sprintf(result, "%s%s", job_status, operation_status);
-    return result;      
-}
-*/
-
-/**
- * @brief Checks if there are enough resources to run a job.
- * Does this by checking the 'in_use_operations' array.
- * @param job Job to be checked.
- * @param config Configuration object with the limit values.
- * @return true, if there are enough resources, false otherwise.
- */
-bool check_resources(Job job, Configuration config)
-{
-    Configuration num_operations_per_type = {0}; /* Set all values to 0. */
-
-    /* Counting the number of operations of the job */
-    for (int i = 0; i < job.op_len; i++)
-    {
-        if (strcmp(job.operations[i], "nop") == 0) num_operations_per_type.nop++;
-        else if (strcmp(job.operations[i], "gcompress") == 0) num_operations_per_type.gcompress++;
-        else if (strcmp(job.operations[i], "gdecompress") == 0) num_operations_per_type.gdecompress++;
-        else if (strcmp(job.operations[i], "bcompress") == 0) num_operations_per_type.bcompress++;
-        else if (strcmp(job.operations[i], "bdecompress") == 0) num_operations_per_type.bdecompress++;
-        else if (strcmp(job.operations[i], "encrypt") == 0) num_operations_per_type.encrypt++;
-        else num_operations_per_type.decrypt++;
-    }
-
-    /* Checking for excess resources */
-    if (num_operations_per_type.nop + in_use_operations[0] > config.nop) return false;
-    if (num_operations_per_type.gcompress + in_use_operations[1] > config.gcompress) return false;
-    if (num_operations_per_type.gdecompress + in_use_operations[2] > config.gdecompress) return false;
-    if (num_operations_per_type.bcompress + in_use_operations[3] > config.bcompress) return false;
-    if (num_operations_per_type.bdecompress + in_use_operations[4] > config.bdecompress) return false;
-    if (num_operations_per_type.encrypt + in_use_operations[5] > config.encrypt) return false;
-    if (num_operations_per_type.decrypt + in_use_operations[6] > config.decrypt) return false;
-
-    return true;
-}
-
-int get_status(char *string, char *fifo_output)
-{
-    char *token = strtok(string, " ");   
-    if (fifo_output)
-    {
-        strcpy(fifo_output,token);
-    }
-
-    token = strtok(NULL, " ");
-    if (strcmp(token, "help") == 0) return HELP;
-    if (strcmp(token, "status") == 0) return STATUS;
-    if (strcmp(token, "proc-file") == 0) return PENDING;
-
-    return -1;
-}
 
 /**
  * @brief Create a PreProcessedInput object.
@@ -336,7 +231,7 @@ int main(int argc, char *argv[])
             
             if (strncmp(arguments, "tmp", 3) == 0) 
             {
-                char *stc_fifo = malloc(sizeof(char) * 64);
+                char *stc_fifo = malloc(sizeof(char) * 1024);
                 int message_status = get_status(strdup(arguments), stc_fifo);
 
                 /* Making sure the '\0' is present to avoid any memory leaks. */
@@ -357,7 +252,7 @@ int main(int argc, char *argv[])
                 switch(message_status)
                 {
                     case HELP:
-                        print_log("Help requested.\n", log_file, false);
+                        // print_log("Help requested.\n", log_file, false);
                         send_help_message(server_to_client);
                         break;
 
@@ -550,6 +445,7 @@ int main(int argc, char *argv[])
 
             /* Currently executing jobs. */
             struct Node *executing_jobs = NULL;
+            int resources[7] = {0}; 
 
             while (true)
             {
@@ -606,7 +502,7 @@ int main(int argc, char *argv[])
                     bool wait = true;
                     while (wait)
                     {
-                        if (check_resources(current_job, config))
+                        if (check_resources(current_job, config, resources))
                         {
                             wait = false;
 
@@ -620,6 +516,7 @@ int main(int argc, char *argv[])
                             if (exec_fork == 0)
                             {
                                 print_log("Executing a job.\n", log_file, false);
+                                update_resources_usage_add(resources, current_job);
 
                                 execute(current_job);
 
@@ -635,9 +532,11 @@ int main(int argc, char *argv[])
                                 _exit(EXIT_SUCCESS);
                             }
                         }
+                        else print_log("Waiting for resources to clear up.\n", log_file, true);
                     }
 
                     llist_delete(&executing_jobs, current_job.desc);
+                    update_resources_usage_del(resources, current_job);
                 }        
 
                 sleep(1);
@@ -651,7 +550,7 @@ int main(int argc, char *argv[])
     }
 
     wait(NULL);
-    
+
     close(log_file);
     return 0;
 }

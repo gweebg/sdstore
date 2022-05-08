@@ -66,3 +66,11 @@ void generate_status_message_from_executing(char *dest, struct Node *llist);
 void generate_completed_message(char *dest, char *in, char *out);
 
 void send_status_to_client(char *fifo, char *content);
+
+bool check_resources(Job job, Configuration config, int *in_use_operations);
+
+void update_resources_usage_add(int *resources, Job job_to_execute);
+
+void update_resources_usage_del(int *resources, Job job_to_execute);
+
+int get_status(char *string, char *fifo_output);
