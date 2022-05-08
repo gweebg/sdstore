@@ -2,7 +2,7 @@
 CC = gcc
 
 # Flags de compilação
-CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wunreachable-code 
+CFLAGS   = -std=gnu99 -Wall -Wextra -O2 -Wunreachable-code -g
 
 # Flags de linking
 LDFLAGS_C = -lm

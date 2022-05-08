@@ -1,1 +1,2 @@
-[DEBUG at 18:19:01:981406] Push requested received (queue_manager).
+[DEBUG at 10:56:27:359888] New job received.
+[DEBUG at 10:56:27:359896] Push requested received (q_manager).

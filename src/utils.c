@@ -20,7 +20,6 @@
 #include <sys/time.h>
 
 #include "../includes/utils.h"
-#include "../includes/llist.h"
 
 /**
  * @brief A better version of malloc that removes the work of checking for error->
