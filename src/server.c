@@ -442,6 +442,7 @@ int main(int argc, char *argv[])
                         _exit(WRITE_ERROR);
                     }
 
+                    free(status_first_half);
                 }
                 else /* Push element to the stack. */ 
                 {
@@ -560,7 +561,7 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
-                    Job current_job = create_job(response_job, argv[2]);
+                    Job current_job = create_job(strdup(response_job), argv[2]);
                     llist_push(&executing_jobs, current_job.desc);
                     /* Dont need to check for validity because it was already checked on PreProcessedInput. */
 
@@ -575,6 +576,7 @@ int main(int argc, char *argv[])
                         if (check_resources(current_job, config, resources))
                         {
                             wait = false;
+                            update_resources_usage_add(resources, current_job);
 
                             pid_t exec_fork = fork();
                             if (exec_fork < 0)
@@ -586,8 +588,6 @@ int main(int argc, char *argv[])
                             if (exec_fork == 0)
                             {
                                 print_log("Executing a job.\n", log_file, false);
-                                update_resources_usage_add(resources, current_job);
-
                                 execute(current_job);
 
                                 char *exec_string = xmalloc(sizeof(char) * 128);
@@ -640,6 +640,7 @@ int main(int argc, char *argv[])
                     free(second_status_half); free(third_status_half); free(status);
                 }    
 
+                memset(status, 0, sizeof(status));
                 sleep(1);
             }
 
@@ -649,6 +650,8 @@ int main(int argc, char *argv[])
 
             close(input_com[1]);
         }
+
+        wait(NULL);
     }
 
     wait(NULL);

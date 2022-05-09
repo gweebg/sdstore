@@ -396,13 +396,13 @@ void update_resources_usage_add(int *resources, Job job_to_execute)
     /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
     for (int i = 0; i < job_to_execute.op_len; i++)
     {
-        if      (strcmp(job_to_execute.operations[i], "nop")         == 0) resources[0]++;
-        else if (strcmp(job_to_execute.operations[i], "gcompress")   == 0) resources[1]++;
-        else if (strcmp(job_to_execute.operations[i], "gdecompress") == 0) resources[2]++;
-        else if (strcmp(job_to_execute.operations[i], "bcompress")   == 0) resources[3]++;
-        else if (strcmp(job_to_execute.operations[i], "bdecompress") == 0) resources[4]++;
-        else if (strcmp(job_to_execute.operations[i], "encrypt")     == 0) resources[5]++;
-        else                                                               resources[6]++;
+        if      (strcmp(job_to_execute.operations[i], "./tools/nop"         ) == 0) resources[0]++;
+        else if (strcmp(job_to_execute.operations[i], "./tools/gcompress"   ) == 0) resources[1]++;
+        else if (strcmp(job_to_execute.operations[i], "./tools/gdecompress" ) == 0) resources[2]++;
+        else if (strcmp(job_to_execute.operations[i], "./tools/bcompress"   ) == 0) resources[3]++;
+        else if (strcmp(job_to_execute.operations[i], "./tools/bdecompress" ) == 0) resources[4]++;
+        else if (strcmp(job_to_execute.operations[i], "./tools/encrypt"     ) == 0) resources[5]++;
+        else resources[6]++;
     }
 }
 
@@ -410,13 +410,13 @@ void update_resources_usage_del(int *resources, Job job_to_execute)
 {
     for (int i = 0; i < job_to_execute.op_len; i++)
     {
-        if      (strcmp(job_to_execute.operations[i], "nop")         == 0) resources[0]--;
-        else if (strcmp(job_to_execute.operations[i], "gcompress")   == 0) resources[1]--;
-        else if (strcmp(job_to_execute.operations[i], "gdecompress") == 0) resources[2]--;
-        else if (strcmp(job_to_execute.operations[i], "bcompress")   == 0) resources[3]--;
-        else if (strcmp(job_to_execute.operations[i], "bdecompress") == 0) resources[4]--;
-        else if (strcmp(job_to_execute.operations[i], "encrypt")     == 0) resources[5]--;
-        else                                                               resources[6]--;
+        if      (strcmp(job_to_execute.operations[i], "./tools/nop"         ) == 0) resources[0]--;
+        else if (strcmp(job_to_execute.operations[i], "./tools/gcompress"   ) == 0) resources[1]--;
+        else if (strcmp(job_to_execute.operations[i], "./tools/gdecompress" ) == 0) resources[2]--;
+        else if (strcmp(job_to_execute.operations[i], "./tools/bcompress"   ) == 0) resources[3]--;
+        else if (strcmp(job_to_execute.operations[i], "./tools/bdecompress" ) == 0) resources[4]--;
+        else if (strcmp(job_to_execute.operations[i], "./tools/encrypt"     ) == 0) resources[5]--;
+        else                                                                        resources[6]--;                                                                
     }
 }
 
