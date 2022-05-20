@@ -1,6 +1,6 @@
 /**
  * @file client.c
- * @author gweebg ; johnny_longo 
+ * @author gweebg ; johnny_longo ; Miguel-Neiva
  * @brief Client side of the application. 
  * @version 0.1
  * @date 2022-04-29
