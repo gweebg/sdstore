@@ -377,28 +377,50 @@ int main(int argc, char *argv[])
                 }
                 else if (size == POP) /* Pop an element from the queue. */
                 {
+                    printf("POPED AN ELEMENT!!!\n");
                     PreProcessedInput job_to_send = pop(pqueue);
 
-                    char *pop_string = xmalloc(sizeof(char) * (45 + strlen(job_to_send.fifo)));
-                    sprintf(pop_string, "Pop request received from job %s (q_manager).\n", job_to_send.fifo);
-                    print_info(pop_string);
-                    free(pop_string);
-
-                    int message_length = strlen(job_to_send.desc) + 1;
-                    if (write(pop_com[1], &message_length, sizeof(int)) < 0)
+                    if (job_to_send.valid == -1)
                     {
-                        print_error("Could not write job.desc length (POP reques) to pop_com.\n");
-                        _exit(WRITE_ERROR);
-                    }
+                        char *error_status = "invalid";
 
-                    if (write(pop_com[1], job_to_send.desc, message_length) < 0)
-                    {
-                        print_error("Could not write job.desc (POP request) to pop_com.\n");
-                        _exit(WRITE_ERROR);
-                    }
+                        int error_length = 8;
+                        if (write(pop_com[1], &error_length, sizeof(int)) < 0)
+                        {
+                            print_error("Could not write job.desc length (POP reques) to pop_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
 
-                    /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
-                    llist_delete(&queued_jobs, job_to_send.fifo);
+                        if (write(pop_com[1], error_status, error_length) < 0)
+                        {
+                            print_error("Could not write job.desc (POP request) to pop_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
+                    }
+                    else
+                    {  
+                        char *pop_string = xmalloc(sizeof(char) * (45 + strlen(job_to_send.fifo)));
+                        sprintf(pop_string, "Pop request received from job %s (q_manager).\n", job_to_send.fifo);
+                        print_info(pop_string);
+                        free(pop_string);
+
+                        int message_length = strlen(job_to_send.desc) + 1;
+                        if (write(pop_com[1], &message_length, sizeof(int)) < 0)
+                        {
+                            print_error("Could not write job.desc length (POP reques) to pop_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
+
+                        if (write(pop_com[1], job_to_send.desc, message_length) < 0)
+                        {
+                            print_error("Could not write job.desc (POP request) to pop_com.\n");
+                            _exit(WRITE_ERROR);
+                        }
+
+                        /* Using the PreProcessedInput id parameter, find the job and remove it from the queued_jobs list */
+                        llist_delete(&queued_jobs, job_to_send.fifo);
+                    }
+                    
                 }
                 else if (size == STAT) /* Retrieve informataion about the state of the queue. */
                 {
@@ -421,6 +443,8 @@ int main(int argc, char *argv[])
                     char *status_first_half = xmalloc(sizeof(char) * 2048);
                     generate_status_message_from_queued(status_first_half, queued_jobs, received_str);
 
+                    /* Comment all bellow this to make the segfault go away. */
+
                     /* Signal the executer that I'm (q_manager) going to send status related things. */
                     char *signal = "stats";
                     if (write(dispacher_com[1], signal, strlen(signal) + 1) < 0)
@@ -442,6 +466,7 @@ int main(int argc, char *argv[])
                         _exit(WRITE_ERROR);
                     }
 
+
                     free(status_first_half);
                 }
                 else /* Push element to the stack. */ 
@@ -458,9 +483,11 @@ int main(int argc, char *argv[])
 
                         job_str[size] = '\0';
 
+                        printf("Received String >>> %s\n", job_str);
+
                         print_log("Push requested received (q_manager).\n", log_file, false);
 
-                        PreProcessedInput job = create_ppinput(job_str);
+                        PreProcessedInput job = create_ppinput(strdup(job_str));
                         
                         // printf("Valid: %d\nPriority: %d\nDesc: %s\nFifo: %s\n", 
                         //        job.valid, job.priority, job.desc, job.fifo);
@@ -491,7 +518,7 @@ int main(int argc, char *argv[])
                         }
 
                         close(server_to_client);
-                        memset(job_str, 0, sizeof(job_str));
+                        memset(job_str, 0, size);
                     }
                 }
             }
@@ -537,6 +564,8 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
+                status[5] = '\0';
+
                 /* If status == 'false' we pop the queue sending a POP message to input_com[0] */
                 if (strncmp(status, "false", 5) == 0)
                 {
@@ -561,52 +590,56 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }
 
-                    Job current_job = create_job(strdup(response_job), argv[2]);
-                    llist_push(&executing_jobs, current_job.desc);
-                    /* Dont need to check for validity because it was already checked on PreProcessedInput. */
-
-                    // printf("From: %s\nTo: %s\n#OP: %d\nFIFO: %s\n", 
-                    //         current_job.from, current_job.to, current_job.op_len, current_job.fifo);
-                    
-                    // for (int i = 0; i < current_job.op_len; i++) printf("%s\n",current_job.operations[i]);
-
-                    bool wait = true;
-                    while (wait)
+                    if (strncmp(response_job, "invalid", 7) != 0)
                     {
-                        if (check_resources(current_job, config, resources))
+
+                        Job current_job = create_job(strdup(response_job), argv[2]);
+                        llist_push(&executing_jobs, current_job.desc);
+                        /* Dont need to check for validity because it was already checked on PreProcessedInput. */
+
+                        // printf("From: %s\nTo: %s\n#OP: %d\nFIFO: %s\n", 
+                        //         current_job.from, current_job.to, current_job.op_len, current_job.fifo);
+                        
+                        // for (int i = 0; i < current_job.op_len; i++) printf("%s\n",current_job.operations[i]);
+
+                        bool should_wait = true;
+                        while (should_wait)
                         {
-                            wait = false;
-                            update_resources_usage_add(resources, current_job);
-
-                            pid_t exec_fork = fork();
-                            if (exec_fork < 0)
+                            if (check_resources(current_job, config, resources))
                             {
-                                print_error("Could not fork process @ executing job.\n");
-                                _exit(FORK_ERROR);
+                                should_wait = false;
+                                update_resources_usage_add(resources, current_job);
+
+                                pid_t exec_fork = fork();
+                                if (exec_fork < 0)
+                                {
+                                    print_error("Could not fork process @ executing job.\n");
+                                    _exit(FORK_ERROR);
+                                }
+
+                                if (exec_fork == 0)
+                                {
+                                    print_log("Executing a job.\n", log_file, false);
+                                    execute(current_job);
+
+                                    char *exec_string = xmalloc(sizeof(char) * 128);
+                                    sprintf(exec_string, "Executed job (%s).\n", current_job.fifo);
+                                    print_info(exec_string);
+                                    free(exec_string);
+
+                                    char *completed_message = xmalloc(sizeof(char) * 128);
+                                    generate_completed_message(completed_message, current_job.from, current_job.to);
+
+                                    send_status_to_client(current_job.fifo, completed_message);
+                                    _exit(EXIT_SUCCESS);
+                                }                            
                             }
-
-                            if (exec_fork == 0)
-                            {
-                                print_log("Executing a job.\n", log_file, false);
-                                execute(current_job);
-
-                                char *exec_string = xmalloc(sizeof(char) * 128);
-                                sprintf(exec_string, "Executed job (%s).\n", current_job.fifo);
-                                print_info(exec_string);
-                                free(exec_string);
-
-                                char *completed_message = xmalloc(sizeof(char) * 128);
-                                generate_completed_message(completed_message, current_job.from, current_job.to);
-
-                                send_status_to_client(current_job.fifo, completed_message);
-                                _exit(EXIT_SUCCESS);
-                            }
+                            else print_log("Waiting for resources to clear up.\n", log_file, false);
                         }
-                        else print_log("Waiting for resources to clear up.\n", log_file, true);
-                    }
 
-                    llist_delete(&executing_jobs, current_job.fifo);
-                    update_resources_usage_del(resources, current_job);
+                        llist_delete(&executing_jobs, current_job.fifo);
+                        update_resources_usage_del(resources, current_job);
+                    }
                 }    
                 else if (strncmp(status, "stats", 5) == 0)
                 {
@@ -638,10 +671,12 @@ int main(int argc, char *argv[])
 
                     send_status_to_client(cts_fifo, status);
                     free(second_status_half); free(third_status_half); free(status);
+
+                    memset(first_status_half, 0, strlen(first_status_half));
                 }    
 
-                memset(status, 0, sizeof(status));
-                sleep(1);
+                memset(status, 0, strlen(status));
+                sleep(0.1);
             }
 
             close(dispacher_com[0]);
@@ -659,70 +694,3 @@ int main(int argc, char *argv[])
     close(log_file);
     return 0;
 }
-
-    //             else if (strncmp(status, "stc", 3) == 0)
-    //             {
-    //                 print_log("status message on executer.\n", log_file, true);
-
-    //                 /* Then we received a status message! */
-    //                 char *status_half = xmalloc(sizeof(char) * 1024);
-    //                 if (read(dispacher_com[0], status_half, 1024) < 0)
-    //                 {
-    //                     print_error("Could not read from dispacher_com.\n");
-    //                     _exit(READ_ERROR);
-    //                 }
-
-    //                 /*
-    //                 The read string contains the following format:
-    //                 where_to_send_fifo
-    //                 queued_job_one
-    //                 ...
-    //                 queued_job_n
-    //                 */
-
-    //                 char *stc_fifo = strtok(status_half, "\n");
-    //                 char *second_status_half = xmalloc(sizeof(char) * 1024);
-
-    //                 strcpy(second_status_half, "In Execution Jobs:\n");
-
-    //                 struct Node *temp = executing_jobs;
-    //                 int counter = 0;
-    //                 while (temp)
-    //                 {
-    //                     char *current_job = xmalloc(sizeof(char) * 256);
-    //                     sprintf(current_job, "[%d] %s\n", counter, temp->data);
-
-    //                     strcat(second_status_half, current_job);
-    //                     temp = temp->next; counter++;
-
-    //                     free(current_job);
-    //                 }
-
-    //                 char *status = xmalloc(sizeof(char) * BUFSIZ);
-    //                 sprintf(status, "[SERVER STATUS]\n%s%s", status_half, second_status_half);
-
-    //                 int server_to_client = open(stc_fifo, O_WRONLY);
-    //                 if (server_to_client < 0)
-    //                 {
-    //                     print_error("Could not open server to client fifo (context: status).\n");
-    //                     _exit(OPEN_ERROR);
-    //                 }
-
-    //                 if (write(server_to_client, status, strlen(status)) < 0)
-    //                 if (server_to_client < 0)
-    //                 {
-    //                     print_error("Could not write to server to client fifo (context: status).\n");
-    //                     _exit(WRITE_ERROR);
-    //                 }
-
-    //                 close(server_to_client);
-
-    //                 free(status_half);
-    //             }
-
-    //             /* Let's not spamm it with perma requests. */
-    //             sleep(0.1);
-    //         }
-
-    //         close(dispacher_com[0]);
-    //         close(input_com[1]);

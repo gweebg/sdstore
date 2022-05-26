@@ -78,7 +78,7 @@ void push(PriorityQueue *queue, PreProcessedInput input)
 PreProcessedInput pop(PriorityQueue *queue)
 {
 
-    if (queue->size != QSIZE)
+    if (queue->size > 0)
     {
         PreProcessedInput elem = queue->values[queue->size - 1];
         queue->size--;
