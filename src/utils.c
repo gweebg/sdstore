@@ -370,15 +370,19 @@ bool check_resources(Job job, Configuration config, int *in_use_operations)
     /* Counting the number of operations of the job */
     for (int i = 0; i < job.op_len; i++)
     {
-        if      (strcmp(job.operations[i], "nop")         == 0) num_operations_per_type.nop++;
-        else if (strcmp(job.operations[i], "gcompress")   == 0) num_operations_per_type.gcompress++;
-        else if (strcmp(job.operations[i], "gdecompress") == 0) num_operations_per_type.gdecompress++;
-        else if (strcmp(job.operations[i], "bcompress")   == 0) num_operations_per_type.bcompress++;
-        else if (strcmp(job.operations[i], "bdecompress") == 0) num_operations_per_type.bdecompress++;
-        else if (strcmp(job.operations[i], "encrypt")     == 0) num_operations_per_type.encrypt++;
-        else                                                    num_operations_per_type.decrypt++;
+        if      (strcmp(job.operations[i], "./tools/nop")          == 0 )  num_operations_per_type.nop++;
+        else if (strcmp(job.operations[i], "./tools/gcompress")    == 0 )  num_operations_per_type.gcompress++;
+        else if (strcmp(job.operations[i], "./tools/gdecompress") == 0 ) num_operations_per_type.gdecompress++;
+        else if (strcmp(job.operations[i], "./tools/bcompress")    == 0 )  num_operations_per_type.bcompress++;
+        else if (strcmp(job.operations[i], "./tools/bdecompress") == 0 ) num_operations_per_type.bdecompress++;
+        else if (strcmp(job.operations[i], "./tools/encrypt")      == 0 )  num_operations_per_type.encrypt++;
+        else                                                         num_operations_per_type.decrypt++;
     }
 
+    // printf("nop : %d / %d\n", num_operations_per_type.nop + in_use_operations[0], config.nop);
+    // printf("gcompress : %d / %d\n", num_operations_per_type.gcompress + in_use_operations[1], config.gcompress);
+    // printf("bcompress : %d / %d\n", num_operations_per_type.bcompress + in_use_operations[2], config.bcompress);
+    
     /* Checking for excess resources */
     if (num_operations_per_type.nop         + in_use_operations[0] > config.nop)         return false;
     if (num_operations_per_type.gcompress   + in_use_operations[1] > config.gcompress)   return false;

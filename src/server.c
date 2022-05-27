@@ -211,7 +211,6 @@ int main(int argc, char *argv[])
     */
     if (pid_main == 0)
     {
-
         close(input_com[0]);
         close(job_string[0]);
         close(stat_com[0]);
@@ -331,6 +330,7 @@ int main(int argc, char *argv[])
     }
     else
     {
+
         pid_t pid_dispacher = fork();
         if (pid_dispacher < 0)
         {
@@ -377,7 +377,6 @@ int main(int argc, char *argv[])
                 }
                 else if (size == POP) /* Pop an element from the queue. */
                 {
-                    printf("POPED AN ELEMENT!!!\n");
                     PreProcessedInput job_to_send = pop(pqueue);
 
                     if (job_to_send.valid == -1)
@@ -483,7 +482,6 @@ int main(int argc, char *argv[])
 
                         job_str[size] = '\0';
 
-                        printf("Received String >>> %s\n", job_str);
 
                         print_log("Push requested received (q_manager).\n", log_file, false);
 
@@ -589,7 +587,7 @@ int main(int argc, char *argv[])
                         print_error("Could not read 'EMPTY' response from dispacher_com.\n");
                         _exit(READ_ERROR);
                     }
-
+                    
                     if (strncmp(response_job, "invalid", 7) != 0)
                     {
 
@@ -632,13 +630,14 @@ int main(int argc, char *argv[])
 
                                     send_status_to_client(current_job.fifo, completed_message);
                                     _exit(EXIT_SUCCESS);
-                                }                            
+                                }   
+
                             }
                             else print_log("Waiting for resources to clear up.\n", log_file, false);
                         }
 
-                        llist_delete(&executing_jobs, current_job.fifo);
                         update_resources_usage_del(resources, current_job);
+                        llist_delete(&executing_jobs, current_job.fifo);
                     }
                 }    
                 else if (strncmp(status, "stats", 5) == 0)
