@@ -186,11 +186,13 @@ int main(int argc, char *argv[])
     }
 
     /* In between processes pipes */
-    int input_com[2], dispacher_com[2], 
-        job_string[2], pop_com[2], stat_com[2], exec_com[2];
+    int input_com[2], dispacher_com[2], job_string[2], pop_com[2] , stat_com[2], 
+        exec_com[2] , check_pipe[2]   , del_pipe[2]  , add_pipe[2], ask_pipe[2];
 
     if (pipe(input_com)  == -1 || pipe(dispacher_com) == -1 || pipe(exec_com) == -1 ||
-        pipe(job_string) == -1 || pipe(pop_com)       == -1 || pipe(stat_com) == -1  )
+        pipe(job_string) == -1 || pipe(pop_com)       == -1 || pipe(stat_com) == -1 ||
+        pipe(check_pipe) == -1 || pipe(del_pipe)      == -1 || pipe(add_pipe) == -1 || 
+        pipe(ask_pipe)   == -1 )
     {
         print_error("Something went wrong while creating the pipe.\n");
         return PIPE_ERROR;
@@ -349,13 +351,19 @@ int main(int argc, char *argv[])
             close(stat_com[1]);
             close(job_string[1]);
             close(input_com[1]);
+            close(check_pipe[1]);
+            close(add_pipe[1]);
+            close(del_pipe[1]);
 
             close(dispacher_com[0]);
             close(pop_com[0]);
             close(exec_com[0]);
+            close(ask_pipe[0]);
 
-            /* Queued Jobs Struct */
+            /* Queued Jobs, In Executing and Resources Struct */
             struct Node *queued_jobs = NULL;
+            struct Node *executing_jobs = NULL;
+            int resources[7] = {0};
 
             while (true)
             {
@@ -366,7 +374,65 @@ int main(int argc, char *argv[])
                     _exit(READ_ERROR);
                 }
 
-                if (size == EMPTY) /* Get status of the queue (is empty or not). */
+                if (size == UPDATE_ADD)
+                {
+                    int add_message_size;
+                    if (read(add_pipe[0], &add_message_size, sizeof(int)) < 0)
+                    {
+                        print_error("Could not read from add_pipe[0].\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    char message[add_message_size];
+                    if (read(add_pipe[0], message, add_message_size) < 0)
+                    {
+                        print_error("Could not read from add_pipe[0].\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    /* Completamente ineficiente. */
+                    Job temp_job = create_job(strdup(message), argv[2]);
+
+                    update_resources_usage_add(resources, temp_job);
+                    llist_push(&executing_jobs, message);
+
+                }
+                else if (size == UPDATE_DEL)
+                {
+                    int del_message_size;
+                    if (read(del_pipe[0], &del_message_size, sizeof(int)) < 0)
+                    {
+                        print_error("Could not read from del_pipe[0].\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    char message[del_message_size];
+                    if (read(del_pipe[0], message, del_message_size) < 0)
+                    {
+                        print_error("Could not read from del_pipe[0].\n");
+                        _exit(READ_ERROR);
+                    }
+
+                    /* Completamente ineficiente. */
+                    Job temp_job = create_job(strdup(message), argv[2]);
+
+                    update_resources_usage_del(resources, temp_job);
+                    llist_delete(&executing_jobs, temp_job.fifo);
+
+                }
+                else if (size == CHECK_RESOURCES)
+                {
+                    int job_resources[7];
+                    for (int i = 0; i < 7; i++)
+                    {
+                        read(check_pipe[0], &job_resources[i], sizeof(int));
+                    }
+
+                    char *can_execute = check_execute(job_resources, config, resources) ? "ye" : "no";
+                    write(ask_pipe[1], can_execute, strlen(can_execute) + 1);
+
+                }
+                else if (size == EMPTY) /* Get status of the queue (is empty or not). */
                 {
                     char *status = is_empty(pqueue) ? "empty" : "false";
                     if (write(dispacher_com[1], status, strlen(status) + 1) < 0)
@@ -437,36 +503,25 @@ int main(int argc, char *argv[])
                     {
                         print_error("Something went wrong while reading string from stat_com.\n");
                         _exit(READ_ERROR);
-                    }      
+                    }    
+
+                    char *finished_part = xmalloc(sizeof(char) * (strlen(received_str) + 1));
+                    char *cts_fifo = strtok_r(received_str, "\n", &finished_part);  
 
                     char *status_first_half = xmalloc(sizeof(char) * 2048);
-                    generate_status_message_from_queued(status_first_half, queued_jobs, received_str);
+                    generate_status_message_from_queued(status_first_half, queued_jobs, finished_part);
 
-                    /* Comment all bellow this to make the segfault go away. */
+                    char *second_status_half = xmalloc(sizeof(char) * 2048);
+                    generate_status_message_from_executing(second_status_half, executing_jobs);
 
-                    /* Signal the executer that I'm (q_manager) going to send status related things. */
-                    char *signal = "stats";
-                    if (write(dispacher_com[1], signal, strlen(signal) + 1) < 0)
-                    {
-                        print_error("Could not write 'stats' signal to dispacher_com.\n");
-                        _exit(WRITE_ERROR);
-                    }
+                    char *third_status_half = xmalloc(sizeof(char) * 2048);
+                    generate_status_message_from_resources(third_status_half, resources, config);
 
-                    message_length = strlen(status_first_half) + 1;
-                    if (write(exec_com[1], &message_length, sizeof(int)) < 0)
-                    {
-                        print_error("Could not write 'message_length' integer to exec_com.\n");
-                        _exit(WRITE_ERROR);
-                    }
+                    char *status = xmalloc(sizeof(char) * (strlen(status_first_half) + strlen(second_status_half) + strlen(third_status_half) + 16));
+                    sprintf(status, "[SERVER STATUS]%s%s%s\n", status_first_half, second_status_half, third_status_half);
 
-                    if (write(exec_com[1], status_first_half, message_length) < 0)
-                    {
-                        print_error("Could not write 'status_first_half' string to exec_com.\n");
-                        _exit(WRITE_ERROR);
-                    }
-
-
-                    free(status_first_half);
+                    send_status_to_client(cts_fifo, status);
+                    free(status_first_half); free(second_status_half); free(third_status_half); free(status);
                 }
                 else /* Push element to the stack. */ 
                 {
@@ -524,10 +579,14 @@ int main(int argc, char *argv[])
             close(dispacher_com[1]);
             close(exec_com[1]);
             close(pop_com[1]);
+            close(ask_pipe[1]);
 
             close(job_string[0]);
             close(input_com[0]);
             close(stat_com[0]);
+            close(check_pipe[0]);
+            close(add_pipe[0]);
+            close(del_pipe[0]);
 
             _exit(EXIT_SUCCESS);
         }
@@ -536,12 +595,12 @@ int main(int argc, char *argv[])
             close(dispacher_com[1]);
             close(pop_com[1]);
             close(exec_com[1]);
+            close(ask_pipe[1]);
 
             close(input_com[0]);
-
-            /* Currently executing jobs. */
-            struct Node *executing_jobs = NULL;
-            int resources[7] = {0}; 
+            close(check_pipe[0]);
+            close(add_pipe[0]);
+            close(del_pipe[0]);
 
             while (true)
             {
@@ -592,7 +651,6 @@ int main(int argc, char *argv[])
                     {
 
                         Job current_job = create_job(strdup(response_job), argv[2]);
-                        llist_push(&executing_jobs, current_job.desc);
                         /* Dont need to check for validity because it was already checked on PreProcessedInput. */
 
                         // printf("From: %s\nTo: %s\n#OP: %d\nFIFO: %s\n", 
@@ -603,10 +661,58 @@ int main(int argc, char *argv[])
                         bool should_wait = true;
                         while (should_wait)
                         {
-                            if (check_resources(current_job, config, resources))
+                            int value = CHECK_RESOURCES;
+                            if (write(input_com[1], &value, sizeof(int)) < 0)
+                            {
+                                print_error("Could not write CHECK_RESOURCES to input_com[1].\n");
+                                _exit(WRITE_ERROR);
+                            }
+
+                            int job_resources[7] = {0};
+                            get_job_resources(current_job, job_resources);
+
+                            for (int i = 0; i < 7; i++)
+                            {
+                                if (write(check_pipe[1], &job_resources[i], sizeof(int)) < 0)
+                                {
+                                    print_error("Could not write RESOURCE_VALUE to check_pipe[1].\n");
+                                    _exit(WRITE_ERROR);
+                                }
+                            }
+
+                            char can_execute[3];
+                            if (read(ask_pipe[0], can_execute, 3) < 0)
+                            {
+                                print_error("Could not read can_execute from ask_pipe[1].\n");
+                                _exit(READ_ERROR);
+                            }
+
+                            if (strncmp(can_execute, "ye", 2) == 0)
                             {
                                 should_wait = false;
-                                update_resources_usage_add(resources, current_job);
+                                // update_resources_usage_add(resources, current_job);
+
+                                /* Escrever para input_com[1] -> UPDATE_ADD */
+
+                                int add_message = UPDATE_ADD;
+                                if (write(input_com[1], &add_message, sizeof(int)) < 0)
+                                {
+                                    print_error("Could not write UPDATE_ADD to input_com[1].\n");
+                                    _exit(WRITE_ERROR);
+                                }
+
+                                int string_size = strlen(current_job.desc) + 1;
+                                if (write(add_pipe[1], &string_size, sizeof(int)) < 0)
+                                {
+                                    print_error("Could not write to add_pipe[1].\n");
+                                    _exit(WRITE_ERROR);
+                                }
+
+                                if (write(add_pipe[1], current_job.desc, string_size) < 0)
+                                {
+                                    print_error("Could not write to add_pipe[1].\n");
+                                    _exit(WRITE_ERROR);
+                                }
 
                                 pid_t exec_fork = fork();
                                 if (exec_fork < 0)
@@ -617,6 +723,9 @@ int main(int argc, char *argv[])
 
                                 if (exec_fork == 0)
                                 {
+                                    close(input_com[0]);
+                                    close(del_pipe[0]);
+
                                     print_log("Executing a job.\n", log_file, false);
                                     execute(current_job);
 
@@ -629,51 +738,39 @@ int main(int argc, char *argv[])
                                     generate_completed_message(completed_message, current_job.from, current_job.to);
 
                                     send_status_to_client(current_job.fifo, completed_message);
+
+                                    int del_message = UPDATE_DEL;
+                                    if (write(input_com[1], &del_message, sizeof(int)) < 0)
+                                    {
+                                        print_error("Could not write UPDATE_ADD to input_com[1].\n");
+                                        _exit(WRITE_ERROR);
+                                    }
+
+                                    int string_size = strlen(current_job.desc) + 1;
+                                    if (write(del_pipe[1], &string_size, sizeof(int)) < 0)
+                                    {
+                                        print_error("Could not write to add_pipe[1].\n");
+                                        _exit(WRITE_ERROR);
+                                    }
+
+                                    if (write(del_pipe[1], current_job.desc, string_size) < 0)
+                                    {
+                                        print_error("Could not write to add_pipe[1].\n");
+                                        _exit(WRITE_ERROR);
+                                    }
+
+                                    close(input_com[0]);
+                                    close(del_pipe[0]);
+
                                     _exit(EXIT_SUCCESS);
                                 }   
 
                             }
                             else print_log("Waiting for resources to clear up.\n", log_file, false);
                         }
-
-                        update_resources_usage_del(resources, current_job);
-                        llist_delete(&executing_jobs, current_job.fifo);
                     }
                 }    
-                else if (strncmp(status, "stats", 5) == 0)
-                {
-                    int first_half_length;
-                    if (read(exec_com[0], &first_half_length, sizeof(int)) < 0)
-                    {
-                        print_error("Could not read 'first_half_length' from exec_com.\n");
-                        _exit(READ_ERROR);
-                    }
-
-                    char first_status_half[first_half_length];
-                    if (read(exec_com[0], first_status_half, first_half_length) < 0)
-                    {
-                        print_error("Could not read 'first_status_half' string from exec_com.\n");
-                        _exit(READ_ERROR);
-                    }
-
-                    char *status_half;
-                    char *cts_fifo = strtok_r(first_status_half, "\n", &status_half);
-
-                    char *second_status_half = xmalloc(sizeof(char) * 2048);
-                    generate_status_message_from_executing(second_status_half, executing_jobs);
-
-                    char *third_status_half = xmalloc(sizeof(char) * 2048);
-                    generate_status_message_from_resources(third_status_half, resources, config);
-
-                    char *status = xmalloc(sizeof(char) * (strlen(status_half) + strlen(second_status_half) + strlen(third_status_half) + 16));
-                    sprintf(status, "[SERVER STATUS]\n%s%s%s\n", status_half, second_status_half, third_status_half);
-
-                    send_status_to_client(cts_fifo, status);
-                    free(second_status_half); free(third_status_half); free(status);
-
-                    memset(first_status_half, 0, strlen(first_status_half));
-                }    
-
+                
                 memset(status, 0, strlen(status));
                 sleep(0.1);
             }
@@ -681,8 +778,12 @@ int main(int argc, char *argv[])
             close(dispacher_com[0]);
             close(exec_com[0]);
             close(pop_com[0]);
+            close(ask_pipe[0]);
 
             close(input_com[1]);
+            close(check_pipe[1]);
+            close(add_pipe[1]);
+            close(del_pipe[1]);
         }
 
         wait(NULL);
