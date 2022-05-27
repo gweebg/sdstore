@@ -76,3 +76,9 @@ void update_resources_usage_add(int *resources, Job job_to_execute);
 void update_resources_usage_del(int *resources, Job job_to_execute);
 
 int get_status(char *string, char *fifo_output);
+
+/* Novas */
+
+bool check_execute(int *job, Configuration config, int *in_use_operations);
+
+void get_job_resources(Job job, int *resources);

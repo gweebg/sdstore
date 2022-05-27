@@ -395,6 +395,20 @@ bool check_resources(Job job, Configuration config, int *in_use_operations)
     return true;
 }
 
+bool check_execute(int *job, Configuration config, int *in_use_operations)
+{
+    /* Checking for excess resources */
+    if (job[0] + in_use_operations[0] > config.nop)         return false;
+    if (job[1] + in_use_operations[1] > config.gcompress)   return false;
+    if (job[2] + in_use_operations[2] > config.gdecompress) return false;
+    if (job[3] + in_use_operations[3] > config.bcompress)   return false;
+    if (job[4] + in_use_operations[4] > config.bdecompress) return false;
+    if (job[5] + in_use_operations[5] > config.encrypt)     return false;
+    if (job[6] + in_use_operations[6] > config.decrypt)     return false;
+
+    return true;
+}
+
 void update_resources_usage_add(int *resources, Job job_to_execute)
 {
     /* 0:nop 1:gcompress 2:gdecompress 3:bcompress 4:bdecompress 5:encrypt 6:decrypt */
@@ -438,4 +452,18 @@ int get_status(char *string, char *fifo_output)
     if (strcmp(token, "proc-file") == 0) return PENDING;
 
     return -1;
+}
+
+void get_job_resources(Job job, int *resources)
+{
+    for (int i = 0; i < job.op_len; i++)
+    {
+        if      (strcmp(job.operations[i], "./tools/nop"         ) == 0) resources[0]++;
+        else if (strcmp(job.operations[i], "./tools/gcompress"   ) == 0) resources[1]++;
+        else if (strcmp(job.operations[i], "./tools/gdecompress" ) == 0) resources[2]++;
+        else if (strcmp(job.operations[i], "./tools/bcompress"   ) == 0) resources[3]++;
+        else if (strcmp(job.operations[i], "./tools/bdecompress" ) == 0) resources[4]++;
+        else if (strcmp(job.operations[i], "./tools/encrypt"     ) == 0) resources[5]++;
+        else resources[6]++;
+    }
 }

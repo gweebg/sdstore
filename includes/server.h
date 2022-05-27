@@ -3,6 +3,9 @@
 #define POP -22
 #define EMPTY -30
 #define STAT -27
+#define UPDATE_ADD -31
+#define UPDATE_DEL -32
+#define CHECK_RESOURCES -33
 
 /**
  * @brief Status enum that describes the progress of a job.
