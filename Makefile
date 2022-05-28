@@ -21,11 +21,11 @@ SRC_S = $(shell find src -type f \( -iname "*.c" ! -iname "client.c" \))
 OBJ_S = $(patsubst $(SRC_DIR)/%.c, $(BIN_DIR)/%.o, $(SRC_S))
 DEP_S = $(OBJ_S:%.o=%.d)
 
-NAME   = client
-NAME_C = client
+NAME   = sdstore
+NAME_C = sdstore
 
-NAME_S   = server
-NAME_S_S = server
+NAME_S   = sdstored
+NAME_S_S = sdstored
 
 # Tudo
 all: $(NAME) $(NAME_S)
@@ -60,18 +60,18 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.c
 .PHONY: clean
 clean:
 	-rm -rf obj/* $(NAME_C)
-	-rm client
+	-rm sdstore
 	-rm tmp/*
 
 .PHONY: cleans
 cleans:
 	-rm -rf obj/* $(NAME_S)
-	-rm server
+	-rm sdstored
 	-rm tmp/*
 
 .PHONY: call
 call: 
 	-rm -rf obj/* $(NAME_C) $(NAME_S)
-	-rm client
-	-rm server
+	-rm sdstore
+	-rm sdstored
 	-rm tmp/*

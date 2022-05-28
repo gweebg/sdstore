@@ -153,7 +153,7 @@ void send_help_message(int server_to_client)
                       "decrypt     : decrypts the file (ccrypt)\n"
                       "Do not forget to start the server application before running a request. Otherwise you will get a deadlock.\n";
 
-    if (write(server_to_client, help_menu, strlen(help_menu)) < 0)
+    if (write(server_to_client, help_menu, strlen(help_menu) + 1) < 0)
     {
         print_error("Could not write into FIFO. <stc> in server.c\n");
         _exit(WRITE_ERROR);
@@ -363,38 +363,6 @@ void send_status_to_client(char *fifo, char *content)
  * @param config Configuration object with the limit values.
  * @return true, if there are enough resources, false otherwise.
  */
-bool check_resources(Job job, Configuration config, int *in_use_operations)
-{
-    Configuration num_operations_per_type = {0}; /* Set all values to 0. */
-
-    /* Counting the number of operations of the job */
-    for (int i = 0; i < job.op_len; i++)
-    {
-        if      (strcmp(job.operations[i], "./tools/nop")          == 0 )  num_operations_per_type.nop++;
-        else if (strcmp(job.operations[i], "./tools/gcompress")    == 0 )  num_operations_per_type.gcompress++;
-        else if (strcmp(job.operations[i], "./tools/gdecompress") == 0 ) num_operations_per_type.gdecompress++;
-        else if (strcmp(job.operations[i], "./tools/bcompress")    == 0 )  num_operations_per_type.bcompress++;
-        else if (strcmp(job.operations[i], "./tools/bdecompress") == 0 ) num_operations_per_type.bdecompress++;
-        else if (strcmp(job.operations[i], "./tools/encrypt")      == 0 )  num_operations_per_type.encrypt++;
-        else                                                         num_operations_per_type.decrypt++;
-    }
-
-    // printf("nop : %d / %d\n", num_operations_per_type.nop + in_use_operations[0], config.nop);
-    // printf("gcompress : %d / %d\n", num_operations_per_type.gcompress + in_use_operations[1], config.gcompress);
-    // printf("bcompress : %d / %d\n", num_operations_per_type.bcompress + in_use_operations[2], config.bcompress);
-    
-    /* Checking for excess resources */
-    if (num_operations_per_type.nop         + in_use_operations[0] > config.nop)         return false;
-    if (num_operations_per_type.gcompress   + in_use_operations[1] > config.gcompress)   return false;
-    if (num_operations_per_type.gdecompress + in_use_operations[2] > config.gdecompress) return false;
-    if (num_operations_per_type.bcompress   + in_use_operations[3] > config.bcompress)   return false;
-    if (num_operations_per_type.bdecompress + in_use_operations[4] > config.bdecompress) return false;
-    if (num_operations_per_type.encrypt     + in_use_operations[5] > config.encrypt)     return false;
-    if (num_operations_per_type.decrypt     + in_use_operations[6] > config.decrypt)     return false;
-
-    return true;
-}
-
 bool check_execute(int *job, Configuration config, int *in_use_operations)
 {
     /* Checking for excess resources */

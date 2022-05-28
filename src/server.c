@@ -505,11 +505,11 @@ int main(int argc, char *argv[])
                         _exit(READ_ERROR);
                     }    
 
-                    char *finished_part = xmalloc(sizeof(char) * (strlen(received_str) + 1));
+                    char *finished_part;
                     char *cts_fifo = strtok_r(received_str, "\n", &finished_part);  
 
                     char *status_first_half = xmalloc(sizeof(char) * 2048);
-                    generate_status_message_from_queued(status_first_half, queued_jobs, finished_part);
+                    generate_status_message_from_queued(status_first_half, queued_jobs, received_str);
 
                     char *second_status_half = xmalloc(sizeof(char) * 2048);
                     generate_status_message_from_executing(second_status_half, executing_jobs);
@@ -518,7 +518,7 @@ int main(int argc, char *argv[])
                     generate_status_message_from_resources(third_status_half, resources, config);
 
                     char *status = xmalloc(sizeof(char) * (strlen(status_first_half) + strlen(second_status_half) + strlen(third_status_half) + 16));
-                    sprintf(status, "[SERVER STATUS]%s%s%s\n", status_first_half, second_status_half, third_status_half);
+                    sprintf(status, "[SERVER STATUS] %s%s%s\n", status_first_half, second_status_half, third_status_half);
 
                     send_status_to_client(cts_fifo, status);
                     free(status_first_half); free(second_status_half); free(third_status_half); free(status);
@@ -536,7 +536,6 @@ int main(int argc, char *argv[])
                         }
 
                         job_str[size] = '\0';
-
 
                         print_log("Push requested received (q_manager).\n", log_file, false);
 
